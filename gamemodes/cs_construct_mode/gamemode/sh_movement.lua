@@ -87,9 +87,8 @@ local function getWeaponSpeed(ply)
 
 	local cls = wep:GetClass()
 
-	-- Снайперские в прицеле — значительно снижаем скорость
-	local scoped = wep.Ironsights == true or wep:GetNWBool("Ironsights", false) or wep:GetNWBool("Zoomed", false)
-	if SNIPER_CLASSES[cls] and scoped then
+	-- Снайперские в прицеле — снижаем скорость (FOV < 60 означает прицел)
+	if SNIPER_CLASSES[cls] and ply:GetFOV() < 60 then
 		return SNIPER_SCOPED_SPEED
 	end
 
