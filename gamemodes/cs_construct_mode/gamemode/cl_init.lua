@@ -988,6 +988,16 @@ hook.Add("HUDPaint", "CSConstruct_Crosshair", function()
 	if CSCL.Phase == PHASE_LOBBY then return end
 	if lp:GetFOV() < 75 then return end  -- скрываем при прицеливании через оптику
 
+	-- Снайперские винтовки: прицел не показываем совсем (как в CS:GO)
+	local _wep = lp:GetActiveWeapon()
+	if IsValid(_wep) then
+		local _cls = _wep:GetClass()
+		if _cls == "weapon_swcs_awp" or _cls == "weapon_swcs_ssg08"
+		or _cls == "weapon_swcs_scar20" or _cls == "weapon_swcs_g3sg1" then
+			return
+		end
+	end
+
 	local cvSize = GetConVar("swcs_crosshairsize")
 	if not cvSize then return end
 
