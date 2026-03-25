@@ -157,7 +157,19 @@ end)
 net.Receive("CSMode_OpenTeamSelect", function() CSConstruct_OpenTeamMenu() end)
 
 CSCL.RoundWinData = nil
+CSCL.BombNotif = nil
 net.Receive("CSMode_CleanupDecals", function() RunConsoleCommand("r_cleardecals") end)
+
+net.Receive("CSMode_BombEvent", function()
+	local event = net.ReadString()
+	if event == "planted" then
+		surface.PlaySound("cs_construct_mode/bombpl.mp3")
+		CSCL.BombNotif = { text = "БОМБА ЗАЛОЖЕНА", color = Color(255, 160, 0), time = CurTime(), duration = 3.5 }
+	elseif event == "defused" then
+		surface.PlaySound("cs_construct_mode/bombdef.mp3")
+		CSCL.BombNotif = { text = "БОМБА ОБЕЗВРЕЖЕНА", color = Color(100, 200, 255), time = CurTime(), duration = 3.5 }
+	end
+end)
 
 net.Receive("CSMode_RoundWin", function()
 	CSCL.RoundWinData = {
@@ -572,6 +584,24 @@ hook.Add("HUDPaint", "CSConstruct_HUD", function()
 			end
 		else
 			CSCL.RoundWinData = nil
+		end
+	end
+
+	-- Bomb event notification (planted / defused)
+	if CSCL.BombNotif then
+		local n = CSCL.BombNotif
+		local elapsed = CurTime() - n.time
+		if elapsed < n.duration then
+			local alpha = 255
+			if elapsed < 0.25 then
+				alpha = math.floor(255 * (elapsed / 0.25))
+			elseif elapsed > n.duration - 0.5 then
+				alpha = math.floor(255 * ((n.duration - elapsed) / 0.5))
+			end
+			local c = n.color
+			draw.SimpleText(n.text, "CS2H_WinBig", sw / 2, sh * 0.38, Color(c.r, c.g, c.b, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		else
+			CSCL.BombNotif = nil
 		end
 	end
 end)

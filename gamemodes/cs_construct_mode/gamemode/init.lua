@@ -29,6 +29,10 @@ util.AddNetworkString("CSMode_LobbyUpdate")
 util.AddNetworkString("CSMode_CleanupDecals")
 util.AddNetworkString("CSMode_SelectBomb")
 util.AddNetworkString("CSMode_KillFeedEntry")
+util.AddNetworkString("CSMode_BombEvent")
+
+resource.AddFile("sound/cs_construct_mode/bombpl.mp3")
+resource.AddFile("sound/cs_construct_mode/bombdef.mp3")
 
 -- ConVars (см. комментарий в shared.lua)
 local cv_min_players = CreateConVar("cs_construct_min_players", "1", { FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY }, "Минимум игроков с командой для старта раундов")
@@ -1033,6 +1037,17 @@ hook.Add("OnEntityCreated", "CSMode_BombZoneFailsafe", function(ent)
 		if not IsValid(ent) then return end
 		if not CS_IsInBombZone(ent:GetPos()) then
 			ent:Remove()
+			return
 		end
+		-- Оповестить всех об установке бомбы
+		net.Start("CSMode_BombEvent")
+		net.WriteString("planted")
+		net.Broadcast()
 	end)
+end)
+
+hook.Add("SWCSC4Defused", "CSMode_BombDefuseNotify", function()
+	net.Start("CSMode_BombEvent")
+	net.WriteString("defused")
+	net.Broadcast()
 end)

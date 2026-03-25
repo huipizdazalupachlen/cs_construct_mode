@@ -14,6 +14,11 @@ particles/
 !materials/vgui/
 !materials/entities/
 
+# Маленькие звуки аддона (не игровые ассеты)
+!sound/
+!sound/cs_construct_mode/
+!sound/cs_construct_mode/*.mp3
+
 # Системное
 .claude/
 .cursor/
