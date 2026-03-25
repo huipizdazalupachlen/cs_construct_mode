@@ -138,6 +138,7 @@ local function syncState(ply)
 	net.WriteFloat(CSConstruct.PhaseEndsAt)
 	net.WriteFloat(CSConstruct.RoundEndsAt)
 	net.WriteUInt(math.Clamp(ply.CSMode_Money or 0, 0, 999999), 32)
+	net.WriteUInt(CSConstruct.GameMode, 8)
 	net.Send(ply)
 end
 

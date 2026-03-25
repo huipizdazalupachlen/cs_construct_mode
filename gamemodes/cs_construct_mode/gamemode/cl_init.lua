@@ -15,10 +15,13 @@ CSCL.ScoreCT = 0
 CSCL.PhaseEndsAt = 0
 CSCL.RoundEndsAt = 0
 CSCL.Money = 0
+CSCL.GameMode = GAMEMODE_COMPETITIVE
 CSCL.LastBDown = false
 CSCL.TeamFrame = nil
 CSCL.BuyFrame = nil
 CSCL.KillFeed = {}
+
+include("cl_radar.lua")
 
 -- ============================================================
 -- CS2 HUD STYLE PALETTE
@@ -152,6 +155,7 @@ net.Receive("CSMode_SyncState", function()
 	CSCL.PhaseEndsAt = net.ReadFloat()
 	CSCL.RoundEndsAt = net.ReadFloat()
 	CSCL.Money = net.ReadUInt(32)
+	CSCL.GameMode = net.ReadUInt(8)
 end)
 
 net.Receive("CSMode_OpenTeamSelect", function() CSConstruct_OpenTeamMenu() end)
