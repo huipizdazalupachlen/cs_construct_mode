@@ -1009,3 +1009,30 @@ net.Receive("CSMode_StartGame", function(_, ply)
 	end
 end)
 
+
+-- ============================================================
+-- ЗОНЫ УСТАНОВКИ БОМБЫ
+-- ============================================================
+
+-- Блокируем IN_ATTACK для C4 вне зоны (до обработки оружием)
+function GM:StartCommand(ply, cmd)
+	if CSConstruct.Phase ~= PHASE_LIVE then return end
+	if ply:Team() ~= TEAM_T or not ply:Alive() then return end
+	local wep = ply:GetActiveWeapon()
+	if not IsValid(wep) or wep:GetClass() ~= "weapon_swcs_c4" then return end
+	if not CS_IsInBombZone(ply:GetPos()) then
+		cmd:RemoveKey(IN_ATTACK)
+		cmd:RemoveKey(IN_ATTACK2)
+	end
+end
+
+-- Страховка: удалить бомбу, если она всё же появилась вне зоны
+hook.Add("OnEntityCreated", "CSMode_BombZoneFailsafe", function(ent)
+	if not IsValid(ent) or ent:GetClass() ~= "swcs_planted_c4" then return end
+	timer.Simple(0, function()
+		if not IsValid(ent) then return end
+		if not CS_IsInBombZone(ent:GetPos()) then
+			ent:Remove()
+		end
+	end)
+end)

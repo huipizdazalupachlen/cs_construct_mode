@@ -616,6 +616,64 @@ function CS_GetGameModePlayersPerTeam(mode)
 end
 
 -- Функция для получения красивого имени ножа
+-- ============================================================
+-- ЗОНЫ УСТАНОВКИ БОМБЫ (по картам)
+-- ============================================================
+-- Полигоны задаются вершинами в XY-плоскости + диапазон Z
+CS_BOMB_ZONES = {
+	["de_dust2new"] = {
+		{
+			name = "A",
+			zMin = 80,  zMax = 250,
+			poly = {
+				{1235.97, 2348.02},
+				{1235.97, 2616.43},
+				{976.07,  2627.06},
+				{974.09,  2444.21},
+				{1069.03, 2348.03},
+			}
+		},
+		{
+			name = "B",
+			zMin = -10, zMax = 160,
+			poly = {
+				{-1699.00, 2490.26},
+				{-1366.09, 2506.82},
+				{-1362.16, 2764.06},
+				{-1514.32, 2852.69},
+				{-1699.97, 2855.97},
+			}
+		},
+	},
+}
+
+local function _pointInPoly2D(px, py, poly)
+	local n, inside, j = #poly, false, #poly
+	for i = 1, n do
+		local xi, yi = poly[i][1], poly[i][2]
+		local xj, yj = poly[j][1], poly[j][2]
+		if ((yi > py) ~= (yj > py)) and (px < (xj - xi) * (py - yi) / (yj - yi) + xi) then
+			inside = not inside
+		end
+		j = i
+	end
+	return inside
+end
+
+-- Возвращает: inZone (bool), siteName (string или nil)
+function CS_IsInBombZone(pos)
+	local zones = CS_BOMB_ZONES[game.GetMap()]
+	if not zones then return true end  -- карта без зон — разрешаем везде
+	for _, zone in ipairs(zones) do
+		if pos.z >= zone.zMin and pos.z <= zone.zMax then
+			if _pointInPoly2D(pos.x, pos.y, zone.poly) then
+				return true, zone.name
+			end
+		end
+	end
+	return false
+end
+
 function CS_GetKnifeName(knifeClass)
 	local name = knifeClass
 	-- Убираем префиксы SWCS и стандартные

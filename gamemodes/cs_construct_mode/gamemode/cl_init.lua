@@ -377,6 +377,19 @@ hook.Add("HUDPaint", "CSConstruct_HUD", function()
 		end
 	end
 
+	-- ========== BOMB ZONE INDICATOR ==========
+	if lp:Team() == TEAM_T and lp:Alive() and CSCL.Phase == PHASE_LIVE then
+		local wep = lp:GetActiveWeapon()
+		if IsValid(wep) and wep:GetClass() == "weapon_swcs_c4" then
+			local inZone, siteName = CS_IsInBombZone(lp:GetPos())
+			if inZone then
+				draw.SimpleText("ЗОНА " .. (siteName or ""), "CS2H_Money", sw / 2, pH(87), Color(255, 200, 0, 220), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			else
+				draw.SimpleText("НЕ В ЗОНЕ", "CS2H_Money", sw / 2, pH(87), Color(200, 80, 80, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			end
+		end
+	end
+
 	-- ========== MONEY (far left) ==========
 	draw.SimpleText("$" .. CSCL.Money, "CS2H_Money", pW(2), pH(93.6), hc, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
