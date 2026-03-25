@@ -1,7 +1,0 @@
-"UnlitGeneric"
-{
-	"$basetexture" "vgui/entities/csgo_kukri_urban_masked"
-	"$vertexcolor" 1 
-	"$vertexalpha" 1 
-	"$nolod" 1 
-}

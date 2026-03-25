@@ -1,7 +1,0 @@
-"UnlitGeneric"
-{
-    "$basetexture" "vgui/ttt/weapon_swcs_knife_flip"
-    "$vertexcolor" 1
-    "$vertexalpha" 1
-    "$translucent" 1
-}
