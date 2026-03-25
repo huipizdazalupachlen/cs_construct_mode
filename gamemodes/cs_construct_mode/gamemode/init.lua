@@ -1051,3 +1051,30 @@ hook.Add("SWCSC4Defused", "CSMode_BombDefuseNotify", function()
 	net.WriteString("defused")
 	net.Broadcast()
 end)
+
+-- ============================================================
+-- ТРЕНИРОВОЧНЫЙ РЕЖИМ: бесконечные патроны и ноуклип
+-- ============================================================
+
+hook.Add("Think", "CSMode_TrainingInfiniteAmmo", function()
+	if not isTrainingMode() then return end
+	for _, ply in ipairs(player.GetAll()) do
+		if not ply:Alive() then continue end
+		local wep = ply:GetActiveWeapon()
+		if not IsValid(wep) then continue end
+		local clip = wep:Clip1()
+		local max1 = wep:GetMaxClip1()
+		if max1 > 0 and clip >= 0 and clip < max1 then
+			local ammoType = wep:GetPrimaryAmmoType()
+			if ammoType >= 0 then
+				ply:SetAmmo(wep:GetMaxClip1() * 10, ammoType)
+			end
+		end
+	end
+end)
+
+hook.Add("PlayerNoClip", "CSMode_TrainingNoclip", function(ply, desired)
+	if isTrainingMode() and isPlayingTeam(ply:Team()) then
+		return desired
+	end
+end)
