@@ -1,168 +1,295 @@
 -- ============================================================
--- CS2-STYLE RADAR
+-- CS2-STYLE CIRCULAR RADAR  (top-right corner)
 -- ============================================================
 
-local RDR_SIZE  = 210   -- размер квадрата радара (px)
-local RDR_PAD   = 14    -- отступ от края экрана
-local RDR_DOT   = 4     -- радиус точки игрока
-local RDR_ARROW = 11    -- длина стрелки направления
+-- Radar geometry (screen-relative, computed on first draw)
+local RDR_PAD  = 12          -- отступ от края экрана
+local RDR_FRAC = 0.105       -- радиус = ScrH() * RDR_FRAC
 
--- Границы мира (расширяются динамически по мере того как игроки ходят)
--- Дефолт примерно соответствует de_dust2
-local rdr = {
-	minX = -2500, maxX = 2100,
-	minY = -1300, maxY = 3300,
-}
+-- После первого кадра сюда записываем нижний край радара,
+-- чтобы killfeed мог начинаться ниже него.
+CS_RADAR_BOTTOM = 0
 
-local function rdrExpand(pos)
-	if pos.x - 300 < rdr.minX then rdr.minX = pos.x - 300 end
-	if pos.x + 300 > rdr.maxX then rdr.maxX = pos.x + 300 end
-	if pos.y - 300 < rdr.minY then rdr.minY = pos.y - 300 end
-	if pos.y + 300 > rdr.maxY then rdr.maxY = pos.y + 300 end
+-- ============================================================
+-- OVERVIEW: координаты карты
+-- ============================================================
+-- pos_x, pos_y — левый верхний угол текстуры в мировых единицах
+-- scale        — мировых единиц на пиксель текстуры
+-- Стандарт de_dust2 (используется как запасной вариант)
+local OV_DEFAULT = { pos_x = -2476, pos_y = 3239, scale = 4.4 }
+
+local overviewCache = {}   -- [mapName] = { pos_x, pos_y, scale }
+
+local function parseOverviewTxt(mapName)
+	if overviewCache[mapName] then return overviewCache[mapName] end
+
+	-- Пробуем прочитать из resource/overviews/<map>.txt
+	local txt = file.Read("resource/overviews/" .. mapName .. ".txt", "GAME")
+	if txt then
+		local px = tonumber(txt:match('"pos_x"%s+"([%-%.%d]+)"'))
+		local py = tonumber(txt:match('"pos_y"%s+"([%-%.%d]+)"'))
+		local sc = tonumber(txt:match('"scale"%s+"([%-%.%d]+)"'))
+		if px and py and sc then
+			overviewCache[mapName] = { pos_x = px, pos_y = py, scale = sc }
+			return overviewCache[mapName]
+		end
+	end
+
+	-- Фоллбэк: если карта называется de_dust2new — используем dust2
+	if mapName:find("dust2") then
+		overviewCache[mapName] = OV_DEFAULT
+	else
+		-- Для неизвестной карты — нулевые данные (без текстуры)
+		overviewCache[mapName] = { pos_x = 0, pos_y = 0, scale = 1, nomap = true }
+	end
+	return overviewCache[mapName]
 end
 
--- Мировые координаты -> пиксели радара (относительно его начала)
-local function rdrProject(wx, wy)
-	local fx = (wx - rdr.minX) / (rdr.maxX - rdr.minX)
-	local fy = 1 - (wy - rdr.minY) / (rdr.maxY - rdr.minY)
-	return fx * RDR_SIZE, fy * RDR_SIZE
+-- ============================================================
+-- ОБЗОРНАЯ ТЕКСТУРА
+-- ============================================================
+local matCache = {}
+local MAT_ERROR = nil  -- лениво инициализируется
+
+local function getOverviewMat(mapName)
+	if matCache[mapName] ~= nil then return matCache[mapName] end
+
+	-- Пробуем стандартный путь CS:GO overview
+	local paths = {
+		"overviews/" .. mapName .. "_radar",
+		"overviews/de_dust2_radar",   -- фоллбэк на dust2 если карта его вариант
+	}
+	for _, p in ipairs(paths) do
+		local m = Material(p)
+		if not m:IsError() then
+			matCache[mapName] = m
+			return m
+		end
+		-- Пробуем и без .vmt расширения
+	end
+	matCache[mapName] = false  -- нет текстуры
+	return false
 end
 
--- Заполненный круг через DrawPoly
-local _circPoly = {}
-local function drawFilledCircle(cx, cy, r, col)
-	local n = 16
-	for i = 1, n do
-		local a = (i / n) * math.pi * 2
-		_circPoly[i] = { x = cx + math.cos(a) * r, y = cy + math.sin(a) * r }
+-- ============================================================
+-- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+-- ============================================================
+
+-- Мировые координаты -> позиция на радаре (относительно центра), нормировано [-1, 1]
+local function worldToNorm(wx, wy, ov)
+	-- u, v — координаты на текстуре 1024×1024 в диапазоне [0, 1]
+	local u = (wx - ov.pos_x) / (1024 * ov.scale)
+	local v = (ov.pos_y - wy) / (1024 * ov.scale)
+	-- центрируем: [-0.5, 0.5] -> [-1, 1]
+	return (u - 0.5) * 2, (v - 0.5) * 2
+end
+
+-- Закрашенный круг через DrawPoly
+local _cpoly = {}
+local function filledCircle(cx, cy, r, col)
+	local steps = 20
+	for i = 1, steps do
+		local a = (i / steps) * math.pi * 2
+		_cpoly[i] = { x = cx + math.cos(a) * r, y = cy + math.sin(a) * r }
 	end
 	draw.NoTexture()
 	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
-	surface.DrawPoly(_circPoly)
+	surface.DrawPoly(_cpoly)
 end
 
--- Стрелка направления от центра точки
+-- Кружок (контур)
+local function circleOutline(cx, cy, r, thick, col)
+	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
+	for i = 0, 360, 2 do
+		local a1 = math.rad(i)
+		local a2 = math.rad(i + 2)
+		-- рисуем тонкие прямоугольники по окружности
+		local x1, y1 = cx + math.cos(a1) * r, cy + math.sin(a1) * r
+		local x2, y2 = cx + math.cos(a2) * r, cy + math.sin(a2) * r
+		surface.DrawLine(math.floor(x1), math.floor(y1), math.floor(x2), math.floor(y2))
+	end
+end
+
+-- Стрелка направления от точки
 local function drawArrow(cx, cy, yaw, len, col)
 	local rad = math.rad(yaw)
 	local ex = cx + math.sin(rad) * len
 	local ey = cy - math.cos(rad) * len
 	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
 	surface.DrawLine(math.floor(cx), math.floor(cy), math.floor(ex), math.floor(ey))
-	-- Маленький треугольник-наконечник
-	local wing = math.rad(yaw + 140)
-	local wing2 = math.rad(yaw - 140)
-	local wx1 = ex + math.sin(wing)  * (len * 0.45)
-	local wy1 = ey - math.cos(wing)  * (len * 0.45)
-	local wx2 = ex + math.sin(wing2) * (len * 0.45)
-	local wy2 = ey - math.cos(wing2) * (len * 0.45)
+	-- Наконечник-треугольник
+	local w1 = math.rad(yaw + 145)
+	local w2 = math.rad(yaw - 145)
 	draw.NoTexture()
 	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
 	surface.DrawPoly({
-		{ x = ex,  y = ey  },
-		{ x = wx1, y = wy1 },
-		{ x = wx2, y = wy2 },
+		{ x = ex,                              y = ey                              },
+		{ x = ex + math.sin(w1) * len * 0.42, y = ey - math.cos(w1) * len * 0.42 },
+		{ x = ex + math.sin(w2) * len * 0.42, y = ey - math.cos(w2) * len * 0.42 },
 	})
 end
 
--- Иконка бомбы (маленький крест)
-local function drawBombIcon(cx, cy, alpha)
-	local s = 5
-	surface.SetDrawColor(255, 200, 0, alpha)
-	surface.DrawRect(math.floor(cx - s), math.floor(cy - 1), s * 2, 2)
-	surface.DrawRect(math.floor(cx - 1), math.floor(cy - s), 2, s * 2)
+-- ============================================================
+-- СТЕНСИЛ-МАСКА (круговое клиппирование)
+-- ============================================================
+local function beginCircleClip(cx, cy, r)
+	render.ClearStencil()
+	render.SetStencilEnable(true)
+	render.SetStencilWriteMask(1)
+	render.SetStencilTestMask(1)
+	render.SetStencilFailOperation(STENCILOPERATION_REPLACE)
+	render.SetStencilPassOperation(STENCILOPERATION_ZERO)
+	render.SetStencilZFailOperation(STENCILOPERATION_ZERO)
+	render.SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_NEVER)
+	render.SetStencilReferenceValue(1)
+
+	local poly = {}
+	for i = 1, 36 do
+		local a = (i / 36) * math.pi * 2
+		poly[i] = { x = cx + math.cos(a) * r, y = cy + math.sin(a) * r }
+	end
+	draw.NoTexture()
+	surface.SetDrawColor(255, 255, 255, 255)
+	surface.DrawPoly(poly)
+
+	render.SetStencilFailOperation(STENCILOPERATION_ZERO)
+	render.SetStencilPassOperation(STENCILOPERATION_REPLACE)
+	render.SetStencilZFailOperation(STENCILOPERATION_ZERO)
+	render.SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_EQUAL)
+	render.SetStencilReferenceValue(1)
 end
+
+local function endCircleClip()
+	render.SetStencilEnable(false)
+	render.ClearStencil()
+end
+
+-- ============================================================
+-- ОСНОВНОЙ HUD HOOK
+-- ============================================================
 
 hook.Add("HUDPaint", "CSMode_Radar", function()
 	local lp = LocalPlayer()
 	if not IsValid(lp) then return end
 	if CSCL.Phase == PHASE_LOBBY then return end
 
-	local sh = ScrH()
-	local ox = RDR_PAD
-	local oy = sh - RDR_PAD - RDR_SIZE
+	local sw, sh = ScrW(), ScrH()
+	local R    = math.floor(sh * RDR_FRAC)
+	local cx   = sw - RDR_PAD - R
+	local cy   = RDR_PAD + R
 
-	-- Фон
-	surface.SetDrawColor(12, 14, 18, 215)
-	surface.DrawRect(ox, oy, RDR_SIZE, RDR_SIZE)
+	-- Публикуем нижний край радара (killfeed начнётся ниже)
+	CS_RADAR_BOTTOM = cy + R + RDR_PAD
 
-	-- Рамка (двойная для CS2-стиля)
-	surface.SetDrawColor(50, 55, 65, 255)
-	surface.DrawOutlinedRect(ox, oy, RDR_SIZE, RDR_SIZE)
-	surface.SetDrawColor(30, 33, 40, 255)
-	surface.DrawOutlinedRect(ox - 1, oy - 1, RDR_SIZE + 2, RDR_SIZE + 2)
+	local mapName = game.GetMap()
+	local ov      = parseOverviewTxt(mapName)
+	local mat     = not ov.nomap and getOverviewMat(mapName) or false
 
+	-- ---- Фон (тёмный круг, виден если нет текстуры) ----
+	filledCircle(cx, cy, R, Color(12, 14, 18, 215))
+
+	-- ---- Начинаем круговой клиппинг ----
+	beginCircleClip(cx, cy, R)
+
+	-- ---- Карта (overview текстура) ----
+	if mat then
+		surface.SetMaterial(mat)
+		surface.SetDrawColor(255, 255, 255, 200)
+		surface.DrawTexturedRect(cx - R, cy - R, R * 2, R * 2)
+
+		-- Слой затемнения поверх текстуры для читаемости точек
+		draw.NoTexture()
+		surface.SetDrawColor(0, 0, 0, 80)
+		surface.DrawRect(cx - R, cy - R, R * 2, R * 2)
+	else
+		-- Нет текстуры — тонкая сетка
+		surface.SetDrawColor(30, 35, 44, 100)
+		local step = R / 2
+		for dx = -R, R, step do
+			surface.DrawLine(math.floor(cx + dx), cy - R, math.floor(cx + dx), cy + R)
+		end
+		for dy = -R, R, step do
+			surface.DrawLine(cx - R, math.floor(cy + dy), cx + R, math.floor(cy + dy))
+		end
+	end
+
+	-- ---- Игроки ----
 	local lpTeam  = lp:Team()
 	local lpAlive = lp:Alive()
-	-- В тренировке и когда мертвы — показываем всех
 	local showAll = (CSCL.GameMode == GAMEMODE_TRAINING) or not lpAlive
 
-	-- Сетка (тонкие линии, как в CS2)
-	surface.SetDrawColor(30, 35, 42, 120)
-	local gridStep = RDR_SIZE / 4
-	for i = 1, 3 do
-		local gx = math.floor(ox + gridStep * i)
-		local gy = math.floor(oy + gridStep * i)
-		surface.DrawLine(gx, oy, gx, oy + RDR_SIZE)
-		surface.DrawLine(ox, gy, ox + RDR_SIZE, gy)
-	end
+	local dotR   = math.max(3, math.floor(R * 0.045))
+	local arrowL = math.max(6, math.floor(R * 0.12))
 
-	-- Игроки
 	for _, ply in ipairs(player.GetAll()) do
 		if not IsValid(ply) then continue end
-
-		local pos = ply:GetPos()
-		rdrExpand(pos)
-
-		local isSelf     = (ply == lp)
-		local isTeammate = (ply:Team() == lpTeam) and not isSelf
-		local isPlaying  = ply:Team() == TEAM_T or ply:Team() == TEAM_CT
+		local isPlaying = ply:Team() == TEAM_T or ply:Team() == TEAM_CT
 		if not isPlaying then continue end
 
-		-- Видимость: своих всегда, врагов только showAll
-		local isEnemy = ply:Team() ~= lpTeam
+		local isSelf     = ply == lp
+		local isEnemy    = ply:Team() ~= lpTeam
 		if isEnemy and not showAll then continue end
-
-		-- Мёртвых не показываем (кроме себя — чтобы не терять точку отсчёта)
 		if not ply:Alive() and not isSelf then continue end
 
-		local px, py = rdrProject(pos.x, pos.y)
-		local sx = ox + px
-		local sy = oy + py
+		local pos = ply:GetPos()
+		local nx, ny
 
-		-- Цвет точки
-		local col
-		if isSelf then
-			col = Color(100, 220, 110, 255)
-		elseif isTeammate then
-			col = Color(65, 175, 80, 220)
+		if ov.nomap then
+			-- Нет данных о карте — динамическая нормировка не реализована,
+			-- просто пропускаем отображение без текстуры
+			nx, ny = worldToNorm(pos.x, pos.y, OV_DEFAULT)
 		else
-			col = Color(210, 55, 55, 220)
+			nx, ny = worldToNorm(pos.x, pos.y, ov)
 		end
 
-		local r = isSelf and (RDR_DOT + 1) or RDR_DOT
+		local sx = cx + nx * R
+		local sy = cy + ny * R
 
-		-- Тень под точкой для читаемости
-		drawFilledCircle(sx, sy, r + 1, Color(0, 0, 0, 120))
+		local col
+		if isSelf then
+			col = Color(100, 225, 115, 255)
+		elseif not isEnemy then
+			col = Color(65, 175, 80, 220)
+		else
+			col = Color(215, 55, 55, 220)
+		end
 
-		-- Сама точка
-		drawFilledCircle(sx, sy, r, col)
+		local r = isSelf and (dotR + 1) or dotR
 
-		-- Стрелка направления взгляда
+		-- Тень
+		filledCircle(sx, sy, r + 1.5, Color(0, 0, 0, 140))
+		-- Точка
+		filledCircle(sx, sy, r, col)
+		-- Стрелка взгляда
 		local yaw = ply:EyeAngles().y
-		drawArrow(sx, sy, yaw, RDR_ARROW, Color(col.r, col.g, col.b, 200))
+		drawArrow(sx, sy, yaw, arrowL, Color(col.r, col.g, col.b, 200))
 	end
 
-	-- Установленная бомба
+	-- ---- Установленная бомба ----
 	for _, ent in ipairs(ents.FindByClass("swcs_planted_c4")) do
 		if not IsValid(ent) then continue end
 		local pos = ent:GetPos()
-		local px, py = rdrProject(pos.x, pos.y)
-		local sx = ox + px
-		local sy = oy + py
-		local pulse = math.floor(math.abs(math.sin(CurTime() * 3.5)) * 120 + 135)
-		drawBombIcon(sx, sy, pulse)
+		local nx, ny = worldToNorm(pos.x, pos.y, ov.nomap and OV_DEFAULT or ov)
+		local sx = cx + nx * R
+		local sy = cy + ny * R
+		local pulse = math.floor(math.abs(math.sin(CurTime() * 3.5)) * 110 + 145)
+		local bs = math.max(4, math.floor(R * 0.04))
+		surface.SetDrawColor(255, 200, 0, pulse)
+		surface.DrawRect(math.floor(sx - bs), math.floor(sy - 1), bs * 2, 2)
+		surface.DrawRect(math.floor(sx - 1), math.floor(sy - bs), 2, bs * 2)
 	end
 
-	-- Подпись
-	draw.SimpleText("RADAR", "CS2H_Tiny", ox + 4, oy + RDR_SIZE - 3, Color(60, 68, 80, 180), TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
+	-- ---- Конец клиппинга ----
+	endCircleClip()
+
+	-- ---- Рамка (поверх клиппинга, чтобы не обрезалась) ----
+	-- Внешняя тёмная окантовка
+	circleOutline(cx, cy, R + 1, 1, Color(20, 22, 28, 255))
+	-- Основная рамка
+	circleOutline(cx, cy, R, 1, Color(65, 72, 85, 255))
+
+	-- ---- Метка карты ----
+	draw.SimpleText(mapName, "CS2H_Tiny",
+		cx, cy + R + 3,
+		Color(65, 75, 90, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 end)

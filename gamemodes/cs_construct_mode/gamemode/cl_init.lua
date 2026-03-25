@@ -469,9 +469,9 @@ hook.Add("HUDPaint", "CSConstruct_HUD", function()
 		draw.SimpleText("[" .. (_bkn or "B"):upper() .. "] BUY", "CS2H_Tiny", sw / 2, pH(88), CS2.muted, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM)
 	end
 
-	-- ========== KILLFEED CS2 (top right) ==========
+	-- ========== KILLFEED CS2 (top right, ниже радара) ==========
 	local kfX    = sw - pW(1)
-	local kfY    = pH(2)
+	local kfY    = (CS_RADAR_BOTTOM and CS_RADAR_BOTTOM > 0) and (CS_RADAR_BOTTOM + pH(0.5)) or pH(2)
 	local kfH    = pH(2.8)
 	local kfGap  = pH(0.35)
 	local kfPad  = pW(0.4)
