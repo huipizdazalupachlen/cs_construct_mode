@@ -338,6 +338,35 @@ hook.Add("HUDPaint", "CSConstruct_HUD", function()
 		if ammo1 >= 0 then
 			local iconSize = sh / 480 * 14.23
 
+			-- Firemode icon (drawn via primitives)
+			do
+				local fm = 1
+				if weapon.GetCurrentFiremode and isfunction(weapon.GetCurrentFiremode) then
+					fm = weapon:GetCurrentFiremode() or 1
+				end
+				local ix = pW(79.5)
+				local iy = pH(93.8)
+				local bw = iconSize * 0.38
+				local bh = iconSize * 0.72
+				local count = (fm < 0) and 1 or (fm > 1) and 3 or 1
+				local showAuto = (fm < 0)
+				local spacing = bw + iconSize * 0.18
+				local startX = ix - (count - 1) * spacing * 0.5
+				draw.NoTexture()
+				surface.SetDrawColor(hc.r, hc.g, hc.b, hc.a or 255)
+				for i = 0, count - 1 do
+					local bx = startX + i * spacing
+					-- Bullet tip (rounded top)
+					draw.RoundedBoxEx(math.floor(bw / 2), math.floor(bx - bw / 2), math.floor(iy - bh / 2), math.ceil(bw), math.ceil(bh * 0.55), hc, true, true, false, false)
+					-- Bullet casing (flat bottom)
+					surface.DrawRect(math.floor(bx - bw / 2), math.floor(iy - bh / 2 + bh * 0.45), math.ceil(bw), math.ceil(bh * 0.38))
+				end
+				if showAuto then
+					for i = 1, 3 do
+						surface.DrawRect(math.floor(ix + bw + i * iconSize * 0.22), math.floor(iy - bh * 0.12), math.ceil(iconSize * 0.1), math.ceil(bh * 0.22))
+					end
+				end
+			end
 
 			-- Reserve ammo
 			draw.SimpleText(" | " .. ammo2, "CS2H_AmmoSm", pW(75), pH(92.5), hc)
