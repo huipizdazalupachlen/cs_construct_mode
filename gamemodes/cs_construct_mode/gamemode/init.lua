@@ -1100,17 +1100,16 @@ hook.Add("OnEntityCreated", "CSMode_TrackGrenade", function(ent)
 	local cls = ent:GetClass()
 	if not isGrenadeEntity(cls) then return end
 
-	timer.Simple(0, function()
+	-- Ждём 0.05с чтобы SWCS успел назначить скорость гранате (он тоже использует таймер)
+	timer.Simple(0.05, function()
 		if not IsValid(ent) then return end
 		local owner = ent:GetOwner()
 		if not IsValid(owner) or not owner:IsPlayer() then return end
-		local phys = ent:GetPhysicsObject()
 		lastGrenade[owner] = {
 			cls    = cls,
 			pos    = ent:GetPos(),
 			angles = ent:GetAngles(),
-			vel    = IsValid(phys) and phys:GetVelocity()      or ent:GetVelocity(),
-			angvel = IsValid(phys) and phys:GetAngleVelocity() or Vector(0, 0, 0),
+			vel    = ent:GetVelocity(),   -- MOVETYPE_FLYGRAVITY — скорость прямо на энтити
 		}
 	end)
 end)
@@ -1128,12 +1127,10 @@ net.Receive("CSMode_RethrowGrenade", function(_, ply)
 	ent:SetOwner(ply)
 	ent:Spawn()
 
-	-- Применяем скорость через физический объект, а не Entity:SetVelocity
-	local phys = ent:GetPhysicsObject()
-	if IsValid(phys) then
-		phys:SetVelocity(data.vel)
-		phys:SetAngleVelocity(data.angvel)
-	else
-		ent:SetVelocity(data.vel)
-	end
+	-- Ставим скорость через тик после Spawn(), чтобы Initialize энтити не сбросил её
+	local vel = data.vel
+	timer.Simple(0, function()
+		if not IsValid(ent) then return end
+		ent:SetVelocity(vel)
+	end)
 end)
