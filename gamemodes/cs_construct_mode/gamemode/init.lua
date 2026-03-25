@@ -30,7 +30,6 @@ util.AddNetworkString("CSMode_CleanupDecals")
 util.AddNetworkString("CSMode_SelectBomb")
 util.AddNetworkString("CSMode_KillFeedEntry")
 util.AddNetworkString("CSMode_BombEvent")
-util.AddNetworkString("CSMode_RethrowGrenade")
 
 resource.AddFile("sound/cs_construct_mode/bombpl.mp3")
 resource.AddFile("sound/cs_construct_mode/bombdef.mp3")
@@ -1081,56 +1080,3 @@ hook.Add("PlayerNoClip", "CSMode_TrainingNoclip", function(ply)
 	end
 end)
 
--- ============================================================
--- RETHROW LAST GRENADE
--- ============================================================
-
-local lastGrenade = {}  -- [ply] = { cls, pos, vel, angles }
-
--- Классы SWCS гранат (projectile entities)
-local function isGrenadeEntity(cls)
-	return cls:find("swcs_thrown") or cls:find("swcs_grenade") or
-	       cls:find("swcs_smoke")  or cls:find("swcs_flash")   or
-	       cls:find("swcs_molotov") or cls:find("swcs_decoy")  or
-	       cls:find("swcs_incendiary")
-end
-
-hook.Add("OnEntityCreated", "CSMode_TrackGrenade", function(ent)
-	if not IsValid(ent) then return end
-	local cls = ent:GetClass()
-	if not isGrenadeEntity(cls) then return end
-
-	-- Ждём 0.05с чтобы SWCS успел назначить скорость гранате (он тоже использует таймер)
-	timer.Simple(0.05, function()
-		if not IsValid(ent) then return end
-		local owner = ent:GetOwner()
-		if not IsValid(owner) or not owner:IsPlayer() then return end
-		lastGrenade[owner] = {
-			cls    = cls,
-			pos    = ent:GetPos(),
-			angles = ent:GetAngles(),
-			vel    = ent:GetVelocity(),   -- MOVETYPE_FLYGRAVITY — скорость прямо на энтити
-		}
-	end)
-end)
-
-net.Receive("CSMode_RethrowGrenade", function(_, ply)
-	if not IsValid(ply) or not ply:Alive() then return end
-	local data = lastGrenade[ply]
-	if not data then return end
-
-	local ent = ents.Create(data.cls)
-	if not IsValid(ent) then return end
-
-	ent:SetPos(data.pos)
-	ent:SetAngles(data.angles)
-	ent:SetOwner(ply)
-	ent:Spawn()
-
-	-- Ставим скорость через тик после Spawn(), чтобы Initialize энтити не сбросил её
-	local vel = data.vel
-	timer.Simple(0, function()
-		if not IsValid(ent) then return end
-		ent:SetVelocity(vel)
-	end)
-end)
