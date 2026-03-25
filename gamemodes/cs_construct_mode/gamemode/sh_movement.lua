@@ -88,7 +88,7 @@ local function getWeaponSpeed(ply)
 	local cls = wep:GetClass()
 
 	-- Снайперские в прицеле — значительно снижаем скорость
-	if SNIPER_CLASSES[cls] and wep:GetIronsights() then
+	if SNIPER_CLASSES[cls] and wep:GetNWBool("Ironsights", false) then
 		return SNIPER_SCOPED_SPEED
 	end
 
