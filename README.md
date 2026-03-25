@@ -6,19 +6,15 @@ CS:GO-стиль геймод для Garry's Mod — командный режи
 
 ## Зависимости (обязательно установить через Workshop)
 
-| Аддон | Ссылка |
-|-------|--------|
-| **CS:GO Weapons (SWCS)** | https://steamcommunity.com/sharedfiles/filedetails/?id=2148377117 |
-| **xdReanimsBase** | https://steamcommunity.com/sharedfiles/filedetails/?id=2143558752 |
-| **xdR: CS:GO Animations** | https://steamcommunity.com/sharedfiles/filedetails/?id=2261825706 |
-| **CS:GO Player Models** | https://steamcommunity.com/sharedfiles/filedetails/?id=1827764477 |
+Подпишись на все аддоны из коллекции:
+**https://steamcommunity.com/sharedfiles/filedetails/?id=3691972773**
 
 ---
 
 ## Установка
 
 ### 1. Установить зависимости
-Подпишись на все аддоны из таблицы выше через Steam Workshop.
+Подпишись на все аддоны из коллекции выше через Steam Workshop.
 
 ### 2. Скачать геймод
 Нажми **Code → Download ZIP** на этой странице и распакуй папку `cs_construct_mode` в:
