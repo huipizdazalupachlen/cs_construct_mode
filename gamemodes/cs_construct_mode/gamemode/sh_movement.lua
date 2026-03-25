@@ -65,9 +65,17 @@ local SLOT_SPEEDS = {
 	[3] = 260,  -- нож
 }
 
-local WALK_SPEED     = 140   -- Shift: тихий шаг
-local KNIFE_SPEED    = 260   -- голые руки / нож
-local JUMP_COOLDOWN  = 0.45  -- задержка между прыжками (анти-бхоп, CS:GO ~0.5s)
+local WALK_SPEED         = 140   -- Shift: тихий шаг
+local KNIFE_SPEED        = 260   -- голые руки / нож
+local JUMP_COOLDOWN      = 0.45  -- задержка между прыжками (анти-бхоп, CS:GO ~0.5s)
+local SNIPER_SCOPED_SPEED = 90   -- скорость при прицеливании в снайперский прицел
+
+local SNIPER_CLASSES = {
+	["weapon_swcs_awp"]    = true,
+	["weapon_swcs_ssg08"]  = true,
+	["weapon_swcs_scar20"] = true,
+	["weapon_swcs_g3sg1"]  = true,
+}
 
 -- ============================================================
 -- ВСПОМОГАТЕЛЬНАЯ: скорость из активного оружия
@@ -78,6 +86,12 @@ local function getWeaponSpeed(ply)
 	if not IsValid(wep) then return KNIFE_SPEED end
 
 	local cls = wep:GetClass()
+
+	-- Снайперские в прицеле — значительно снижаем скорость
+	if SNIPER_CLASSES[cls] and wep:GetIronsights() then
+		return SNIPER_SCOPED_SPEED
+	end
+
 	local spd = WEAPON_SPEEDS[cls]
 	if spd then return spd end
 
