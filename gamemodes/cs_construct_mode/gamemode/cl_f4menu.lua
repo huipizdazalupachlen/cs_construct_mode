@@ -308,6 +308,7 @@ local function OpenF4Menu()
     NavBtn("ПРИЦЕЛ",    "crosshair")
     NavBtn("ПЕРЧАТКИ",  "gloves")
     NavBtn("МОДЕЛЬ",    "playermodel")
+    NavBtn("БИНДЫ",     "binds")
 
     -- ========================================================
     -- Вкладка ПРИЦЕЛ
@@ -914,6 +915,233 @@ local function OpenF4Menu()
         end
     end
 
+    -- ========================================================
+    -- Вкладка БИНДЫ
+    -- ========================================================
+    local pBinds = vgui.Create("DPanel", f)
+    pBinds:SetPos(contX, contY)
+    pBinds:SetSize(contW, contH)
+    pBinds:SetVisible(false)
+    pBinds.Paint = function() end
+    panels["binds"] = pBinds
+
+    do
+        -- Список биндов: { label, тип "custom"/"engine", cvarName/cmd, defaultKey }
+        local SECTIONS = {
+            {
+                title = "ИГРОВЫЕ",
+                rows = {
+                    { label = "Меню закупки",   kind = "custom", cvar = "csm_key_buy",      default = KEY_B   },
+                    { label = "Настройки (F4)", kind = "custom", cvar = "csm_key_settings",  default = KEY_F4  },
+                },
+            },
+            {
+                title = "ДВИЖЕНИЕ",
+                rows = {
+                    { label = "Прыжок",        kind = "engine", cmd = "+jump",         default = "SPACE" },
+                    { label = "Присесть",      kind = "engine", cmd = "+duck",         default = "CTRL"  },
+                    { label = "Тихий шаг",     kind = "engine", cmd = "+speed",        default = "SHIFT" },
+                    { label = "Использовать",  kind = "engine", cmd = "+use",          default = "E"     },
+                },
+            },
+            {
+                title = "ПРОЧЕЕ",
+                rows = {
+                    { label = "Голосовой чат", kind = "engine", cmd = "+voicerecord",  default = "V"     },
+                    { label = "Таблица счёта", kind = "engine", cmd = "+showscores",   default = "TAB"   },
+                    { label = "Фонарик",       kind = "engine", cmd = "impulse 100",   default = "F"     },
+                },
+            },
+        }
+
+        -- Клавиши-модификаторы, которые пропускаем при назначении
+        local SKIP_KEYS = {}
+        for _, k in ipairs({ KEY_LSHIFT, KEY_RSHIFT, KEY_LCONTROL, KEY_RCONTROL,
+                              KEY_LALT, KEY_RALT, KEY_LWIN, KEY_RWIN, KEY_NONE }) do
+            SKIP_KEYS[k] = true
+        end
+
+        -- Получить текстовое название клавиши для отображения
+        local function keyLabel(row)
+            if row.kind == "custom" then
+                local cv = GetConVar(row.cvar)
+                if not cv then return "?" end
+                local kn = input.GetKeyName(cv:GetInt())
+                return kn and kn:upper() or "?"
+            else
+                local kn = input.LookupBinding(row.cmd, true)
+                return kn and kn:upper() or "—"
+            end
+        end
+
+        -- Назначить клавишу
+        local function applyKey(row, keyIdx, keyName)
+            if row.kind == "custom" then
+                RunConsoleCommand(row.cvar, tostring(keyIdx))
+            else
+                game.ConsoleCommand('bind "' .. keyName:lower() .. '" "' .. row.cmd .. '"\n')
+            end
+        end
+
+        -- Сбросить к дефолту
+        local function resetKey(row)
+            if row.kind == "custom" then
+                RunConsoleCommand(row.cvar, tostring(row.default))
+            else
+                game.ConsoleCommand('bind "' .. row.default:lower() .. '" "' .. row.cmd .. '"\n')
+            end
+        end
+
+        -- Состояние ожидания клавиши
+        local listening = nil  -- { btn, row, prevText }
+
+        -- Think — ловим нажатие при listening
+        pBinds.Think = function(s)
+            if not listening then return end
+            for i = 1, 159 do
+                if SKIP_KEYS[i] then continue end
+                if input.IsKeyDown(i) then
+                    if i == KEY_ESCAPE then
+                        listening.btn:SetText(listening.prevText)
+                        listening = nil
+                    else
+                        local kn = input.GetKeyName(i)
+                        if kn then
+                            applyKey(listening.row, i, kn)
+                            listening.btn:SetText(kn:upper())
+                            listening = nil
+                        end
+                    end
+                    return
+                end
+            end
+        end
+
+        -- Scroll panel
+        local scroll = vgui.Create("DScrollPanel", pBinds)
+        scroll:SetPos(0, 0)
+        scroll:SetSize(contW, contH)
+        local sb = scroll:GetVBar()
+        sb.Paint = function(s, w, h)
+            draw.RoundedBox(2, 0, 0, w, h, CS2_BTN)
+        end
+        sb.btnUp.Paint   = function() end
+        sb.btnDown.Paint = function() end
+        sb.btnGrip.Paint = function(s, w, h)
+            draw.RoundedBox(2, 1, 0, w - 2, h, CS2_ACCENT)
+        end
+
+        local canvas = scroll:GetCanvas()
+        canvas.Paint = function() end
+
+        local ROW_H    = 36
+        local SEC_H    = 26
+        local PAD_X    = 12
+        local KEY_W    = 90
+        local RST_W    = 60
+        local curY     = 8
+
+        local function AddSectionHdr(title)
+            local lbl = vgui.Create("DLabel", canvas)
+            lbl:SetPos(PAD_X, curY + SEC_H * 0.5 - 7)
+            lbl:SetSize(contW - PAD_X * 2, 14)
+            lbl:SetText(title)
+            lbl:SetFont("CS2_F4_Section")
+            lbl:SetTextColor(CS2_ACCENT)
+            -- separator line
+            lbl.Paint = function(s, w, h)
+                draw.SimpleText(title, "CS2_F4_Section", 0, h / 2, CS2_ACCENT, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+                surface.SetDrawColor(CS2_BORDER)
+                local tw = select(1, surface.GetTextSize(title)) + 8
+                surface.DrawRect(tw, h / 2, w - tw, 1)
+            end
+            lbl:SetText("")
+            curY = curY + SEC_H + 2
+        end
+
+        local function AddRow(row)
+            local rowPanel = vgui.Create("DPanel", canvas)
+            rowPanel:SetPos(PAD_X, curY)
+            rowPanel:SetSize(contW - PAD_X * 2, ROW_H)
+            rowPanel.Paint = function(s, w, h)
+                draw.RoundedBox(3, 0, 0, w, h, CS2_BTN)
+            end
+
+            -- Action label
+            local lbl = vgui.Create("DLabel", rowPanel)
+            lbl:SetPos(10, 0)
+            lbl:SetSize(contW - PAD_X * 2 - KEY_W - RST_W - 30, ROW_H)
+            lbl:SetText(row.label)
+            lbl:SetFont("CS2_F4_Label")
+            lbl:SetTextColor(CS2_TEXT)
+            lbl:SetContentAlignment(4)
+
+            -- Key button
+            local keyBtn = vgui.Create("DButton", rowPanel)
+            local kbX = contW - PAD_X * 2 - KEY_W - RST_W - 4
+            keyBtn:SetPos(kbX, (ROW_H - 24) / 2)
+            keyBtn:SetSize(KEY_W, 24)
+            keyBtn:SetText(keyLabel(row))
+            keyBtn:SetFont("CS2_F4_Code")
+            keyBtn.Paint = function(s, w, h)
+                local isListening = (listening and listening.btn == s)
+                local bg = isListening and Color(87, 186, 255, 50) or (s:IsHovered() and CS2_BTN_HOV or CS2_PANEL_LT)
+                draw.RoundedBox(3, 0, 0, w, h, bg)
+                surface.SetDrawColor(isListening and CS2_ACCENT or CS2_BORDER)
+                surface.DrawOutlinedRect(0, 0, w, h, 1)
+                local col = isListening and CS2_ACCENT or CS2_TEXT
+                draw.SimpleText(s:GetText(), "CS2_F4_Code", w / 2, h / 2, col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            end
+            keyBtn.DoClick = function()
+                if listening then
+                    -- Отменяем предыдущий listening
+                    listening.btn:SetText(listening.prevText)
+                end
+                listening = { btn = keyBtn, row = row, prevText = keyBtn:GetText() }
+                keyBtn:SetText("...")
+            end
+
+            -- Reset button
+            local rstBtn = vgui.Create("DButton", rowPanel)
+            rstBtn:SetPos(kbX + KEY_W + 4, (ROW_H - 24) / 2)
+            rstBtn:SetSize(RST_W, 24)
+            rstBtn:SetText("СБРОС")
+            rstBtn:SetFont("CS2_F4_Small")
+            rstBtn.Paint = function(s, w, h)
+                local bg = s:IsHovered() and CS2_BTN_HOV or CS2_BTN
+                draw.RoundedBox(3, 0, 0, w, h, bg)
+                draw.SimpleText("СБРОС", "CS2_F4_Small", w / 2, h / 2, CS2_MUTED, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            end
+            rstBtn.DoClick = function()
+                if listening and listening.btn == keyBtn then listening = nil end
+                resetKey(row)
+                if row.kind == "custom" then
+                    keyBtn:SetText(input.GetKeyName(row.default):upper())
+                else
+                    keyBtn:SetText(row.default:upper())
+                end
+            end
+
+            curY = curY + ROW_H + 3
+        end
+
+        -- Строим UI
+        for _, section in ipairs(SECTIONS) do
+            AddSectionHdr(section.title)
+            for _, row in ipairs(section.rows) do
+                AddRow(row)
+            end
+            curY = curY + 6
+        end
+
+        canvas:SetTall(curY + 8)
+
+        -- Сбрасываем listening при закрытии меню
+        pBinds.OnRemove = function()
+            listening = nil
+        end
+    end
+
     -- Открываем первую вкладку
     SwitchTab("crosshair")
 end
@@ -923,7 +1151,8 @@ end
 -- ============================================================
 local f4WasDown = false
 hook.Add("Think", "CSConstruct_F4KeyToggle", function()
-    local down = input.IsKeyDown(KEY_F4)
+    local settKey = (GetConVar("csm_key_settings") and GetConVar("csm_key_settings"):GetInt()) or KEY_F4
+    local down = input.IsKeyDown(settKey)
     if down and not f4WasDown then
         if not vgui.GetKeyboardFocus() then
             OpenF4Menu()

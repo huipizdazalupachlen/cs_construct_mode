@@ -1,5 +1,10 @@
 include("shared.lua")
 include("cl_lobby.lua")
+
+-- Configurable keybinds (defined before cl_f4menu.lua uses them)
+CreateConVar("csm_key_buy",      tostring(KEY_B),   {FCVAR_ARCHIVE, FCVAR_CLIENTSIDE}, "Клавиша меню закупки")
+CreateConVar("csm_key_settings", tostring(KEY_F4),  {FCVAR_ARCHIVE, FCVAR_CLIENTSIDE}, "Клавиша настроек F4")
+
 include("cl_f4menu.lua")
 
 CSCL = CSCL or {}
@@ -415,7 +420,8 @@ hook.Add("HUDPaint", "CSConstruct_HUD", function()
 
 	-- ========== BUY HINT ==========
 	if CSCL.Phase == PHASE_FREEZE and (lp:Team() == TEAM_T or lp:Team() == TEAM_CT) then
-		draw.SimpleText("[B] BUY", "CS2H_Tiny", sw / 2, pH(88), CS2.muted, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM)
+		local _bkn = GetConVar("csm_key_buy") and input.GetKeyName(GetConVar("csm_key_buy"):GetInt()) or "B"
+		draw.SimpleText("[" .. (_bkn or "B"):upper() .. "] BUY", "CS2H_Tiny", sw / 2, pH(88), CS2.muted, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM)
 	end
 
 	-- ========== KILLFEED CS2 (top right) ==========
@@ -751,8 +757,9 @@ end
 hook.Add("Think", "CSConstruct_BuyKey", function()
 	local lp = LocalPlayer()
 	if not IsValid(lp) or gui.IsGameUIVisible() then return end
+	local _buyKey = (GetConVar("csm_key_buy") and GetConVar("csm_key_buy"):GetInt()) or KEY_B
 	if IsValid(CSCL.BuyFrame) then
-		if not lp:IsTyping() and input.WasKeyPressed(KEY_B) then
+		if not lp:IsTyping() and input.WasKeyPressed(_buyKey) then
 			CSConstruct_CloseBuyMenu() CSCL._buyBSuppressUntil = CurTime() + 0.25 CSCL.LastBDown = true return
 		end
 		if not lp:IsTyping() and input.WasKeyPressed(KEY_ESCAPE) then
@@ -765,7 +772,7 @@ hook.Add("Think", "CSConstruct_BuyKey", function()
 		end
 	end
 	if not IsValid(CSCL.BuyFrame) and vgui.CursorVisible() then return end
-	local down = input.IsKeyDown(KEY_B)
+	local down = input.IsKeyDown(_buyKey)
 	if down and not CSCL.LastBDown then
 		if IsValid(CSCL.BuyFrame) then CSConstruct_CloseBuyMenu() CSCL._buyBSuppressUntil = CurTime() + 0.25
 		elseif lp:Alive() and (lp:Team() == TEAM_T or lp:Team() == TEAM_CT) and CSCL.Phase == PHASE_FREEZE then
