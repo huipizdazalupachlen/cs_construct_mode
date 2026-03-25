@@ -1,0 +1,16 @@
+{
+	"title": "CS Construct Mode",
+	"type": "gamemode",
+	"tags": [ "Roleplay", "Realism" ],
+	"ignore": [
+		"*.md",
+		"*.psd",
+		"*.xcf",
+		"*.bak",
+		".gitignore",
+		".git/*",
+		".claude/*",
+		"*.sw.vtx",
+		"*.xbox.vtx"
+	]
+}
