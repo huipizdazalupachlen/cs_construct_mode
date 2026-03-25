@@ -931,8 +931,9 @@ local function OpenF4Menu()
             {
                 title = "ИГРОВЫЕ",
                 rows = {
-                    { label = "Меню закупки",   kind = "custom", cvar = "csm_key_buy",      default = KEY_B   },
-                    { label = "Настройки (F4)", kind = "custom", cvar = "csm_key_settings",  default = KEY_F4  },
+                    { label = "Меню закупки",         kind = "custom", cvar = "csm_key_buy",       default = KEY_B   },
+                    { label = "Настройки (F4)",       kind = "custom", cvar = "csm_key_settings",  default = KEY_F4  },
+                    { label = "Повтор броска гранаты", kind = "custom", cvar = "csm_key_rethrow",   default = KEY_F   },
                 },
             },
             {
