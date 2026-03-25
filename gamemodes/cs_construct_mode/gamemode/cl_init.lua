@@ -84,9 +84,7 @@ mkFont("CS2_SB_Stat", 13)
 mkFont("CS2_SB_Map", 11)
 
 -- Materials
-local matBullet = Material("materials/bullet.png")
-local matAuto   = Material("materials/auto.png")
-local matBurst  = Material("materials/burst.png")
+
 local matGrad   = surface.GetTextureID("gui/gradient")
 
 -- Circular avatar (simple AvatarImage, created once)
@@ -340,17 +338,6 @@ hook.Add("HUDPaint", "CSConstruct_HUD", function()
 		if ammo1 >= 0 then
 			local iconSize = sh / 480 * 14.23
 
-			-- Firemode icon (ARC9 / SWCS support)
-			local fmMat = matBullet
-			if weapon.GetCurrentFiremode and isfunction(weapon.GetCurrentFiremode) then
-				local fm = weapon:GetCurrentFiremode()
-				if fm and fm < 0 then fmMat = matAuto
-				elseif fm and fm > 1 then fmMat = matBurst end
-			end
-
-			surface.SetMaterial(fmMat)
-			surface.SetDrawColor(hc)
-			surface.DrawTexturedRectRotated(pW(79.5), pH(93.8), iconSize, iconSize, -1)
 
 			-- Reserve ammo
 			draw.SimpleText(" | " .. ammo2, "CS2H_AmmoSm", pW(75), pH(92.5), hc)
