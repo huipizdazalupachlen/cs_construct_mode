@@ -1,0 +1,8 @@
+"cs_construct_mode"
+{
+	"base"		"base"
+	"title"		"CS Construct"
+	"maps"		"^gm_"
+	"category"	"pvp"
+	"menusystem"	"1"
+}

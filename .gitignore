@@ -1,0 +1,21 @@
+# Исключаем тяжёлые бинарные файлы (модели, текстуры, звуки)
+# Они берутся из Workshop-аддонов и CS:GO/CS2 — см. README
+models/
+sound/
+materials/models/
+materials/props_*/
+maps/*.bsp
+maps/*.nav
+maps/*.ain
+particles/
+
+# Оставляем только HUD-иконки и мелкие UI-материалы
+!materials/hud/
+!materials/vgui/
+!materials/entities/
+
+# Системное
+.claude/
+.cursor/
+*.DS_Store
+Thumbs.db

@@ -1,0 +1,7 @@
+"UnlitGeneric"
+{
+    "$basetexture" "vgui/ttt/weapon_swcs_molotov"
+    "$vertexcolor" 1
+    "$vertexalpha" 1
+    "$translucent" 1
+}
