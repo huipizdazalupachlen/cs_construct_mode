@@ -12,61 +12,61 @@
 
 local WEAPON_SPEEDS = {
 	-- Пистолеты
-	["weapon_swcs_glock"]     = 300,
-	["weapon_swcs_usp_silencer"]       = 295,
-	["weapon_swcs_hkp2000"]     = 300,
-	["weapon_swcs_p250"]      = 300,
-	["weapon_swcs_fiveseven"] = 300,
-	["weapon_swcs_tec9"]      = 300,
-	["weapon_swcs_deagle"]    = 290,
-	["weapon_swcs_elite"]     = 300,
-	["weapon_swcs_cz75"]      = 300,
-	["weapon_swcs_revolver"]  = 275,
+	["weapon_swcs_glock"]     = 255,
+	["weapon_swcs_usp_silencer"]       = 250,
+	["weapon_swcs_hkp2000"]     = 255,
+	["weapon_swcs_p250"]      = 255,
+	["weapon_swcs_fiveseven"] = 255,
+	["weapon_swcs_tec9"]      = 255,
+	["weapon_swcs_deagle"]    = 245,
+	["weapon_swcs_elite"]     = 255,
+	["weapon_swcs_cz75"]      = 255,
+	["weapon_swcs_revolver"]  = 235,
 
 	-- ПП
-	["weapon_swcs_mac10"]  = 300,
-	["weapon_swcs_mp9"]    = 300,
-	["weapon_swcs_mp7"]    = 290,
-	["weapon_swcs_mp5sd"]    = 295,
-	["weapon_swcs_ump45"]    = 290,
-	["weapon_swcs_p90"]    = 290,
-	["weapon_swcs_bizon"]  = 300,
+	["weapon_swcs_mac10"]  = 255,
+	["weapon_swcs_mp9"]    = 255,
+	["weapon_swcs_mp7"]    = 245,
+	["weapon_swcs_mp5sd"]    = 250,
+	["weapon_swcs_ump45"]    = 245,
+	["weapon_swcs_p90"]    = 245,
+	["weapon_swcs_bizon"]  = 255,
 
 	-- Дробовики
-	["weapon_swcs_nova"]     = 290,
-	["weapon_swcs_xm1014"]   = 270,
-	["weapon_swcs_mag7"]     = 280,
-	["weapon_swcs_sawedoff"] = 290,
+	["weapon_swcs_nova"]     = 245,
+	["weapon_swcs_xm1014"]   = 230,
+	["weapon_swcs_mag7"]     = 240,
+	["weapon_swcs_sawedoff"] = 245,
 
 	-- Винтовки
-	["weapon_swcs_famas"]   = 280,
-	["weapon_swcs_galilar"] = 270,
-	["weapon_swcs_ak47"]    = 270,
-	["weapon_swcs_m4a1"]    = 280,
-	["weapon_swcs_m4a1_silencer"]   = 280,
-	["weapon_swcs_sg556"]   = 265,
-	["weapon_swcs_aug"]     = 275,
+	["weapon_swcs_famas"]   = 240,
+	["weapon_swcs_galilar"] = 230,
+	["weapon_swcs_ak47"]    = 230,
+	["weapon_swcs_m4a1"]    = 240,
+	["weapon_swcs_m4a1_silencer"]   = 240,
+	["weapon_swcs_sg556"]   = 225,
+	["weapon_swcs_aug"]     = 235,
 
 	-- Снайперские
-	["weapon_swcs_ssg08"]  = 290,
-	["weapon_swcs_awp"]    = 255,
-	["weapon_swcs_scar20"] = 265,
-	["weapon_swcs_g3sg1"]  = 265,
+	["weapon_swcs_ssg08"]  = 245,
+	["weapon_swcs_awp"]    = 215,
+	["weapon_swcs_scar20"] = 225,
+	["weapon_swcs_g3sg1"]  = 225,
 
 	-- Пулемёты
-	["weapon_swcs_negev"] = 200,
-	["weapon_swcs_m249"]  = 250,
+	["weapon_swcs_negev"] = 170,
+	["weapon_swcs_m249"]  = 210,
 }
 
 -- Скорость по слоту (fallback для нераспознанного оружия)
 local SLOT_SPEEDS = {
-	[1] = 275,  -- винтовки/SMG/дробовики
-	[2] = 300,  -- пистолеты
-	[3] = 310,  -- нож
+	[1] = 235,  -- винтовки/SMG/дробовики
+	[2] = 255,  -- пистолеты
+	[3] = 265,  -- нож
 }
 
-local WALK_SPEED     = 170   -- Shift: тихий шаг
-local KNIFE_SPEED    = 310   -- голые руки / нож
+local WALK_SPEED     = 145   -- Shift: тихий шаг
+local KNIFE_SPEED    = 265   -- голые руки / нож
 local JUMP_COOLDOWN  = 0.45  -- задержка между прыжками (анти-бхоп, CS:GO ~0.5s)
 
 -- ============================================================
