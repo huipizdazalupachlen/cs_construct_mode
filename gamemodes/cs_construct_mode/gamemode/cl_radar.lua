@@ -175,7 +175,7 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 
 	local sw, sh = ScrW(), ScrH()
 	local R    = math.floor(sh * RDR_FRAC)
-	local cx   = sw - RDR_PAD - R
+	local cx   = RDR_PAD + R
 	local cy   = RDR_PAD + R
 
 	-- Публикуем нижний край радара (killfeed начнётся ниже)
