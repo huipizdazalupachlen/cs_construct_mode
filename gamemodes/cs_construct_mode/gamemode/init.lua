@@ -1104,11 +1104,13 @@ hook.Add("OnEntityCreated", "CSMode_TrackGrenade", function(ent)
 		if not IsValid(ent) then return end
 		local owner = ent:GetOwner()
 		if not IsValid(owner) or not owner:IsPlayer() then return end
+		local phys = ent:GetPhysicsObject()
 		lastGrenade[owner] = {
-			cls     = cls,
-			pos     = ent:GetPos(),
-			vel     = ent:GetVelocity(),
-			angles  = ent:GetAngles(),
+			cls    = cls,
+			pos    = ent:GetPos(),
+			angles = ent:GetAngles(),
+			vel    = IsValid(phys) and phys:GetVelocity()      or ent:GetVelocity(),
+			angvel = IsValid(phys) and phys:GetAngleVelocity() or Vector(0, 0, 0),
 		}
 	end)
 end)
@@ -1125,5 +1127,13 @@ net.Receive("CSMode_RethrowGrenade", function(_, ply)
 	ent:SetAngles(data.angles)
 	ent:SetOwner(ply)
 	ent:Spawn()
-	ent:SetVelocity(data.vel)
+
+	-- Применяем скорость через физический объект, а не Entity:SetVelocity
+	local phys = ent:GetPhysicsObject()
+	if IsValid(phys) then
+		phys:SetVelocity(data.vel)
+		phys:SetAngleVelocity(data.angvel)
+	else
+		ent:SetVelocity(data.vel)
+	end
 end)
