@@ -16,43 +16,8 @@ local BOT_CLASS = {
 	[TEAM_CT] = "css_bot_ct_csgo",
 }
 
--- ============================================================
--- ОТНОШЕНИЯ БОТА К ИГРОКАМ И ДРУГИМ БОТАМ
--- ============================================================
-
-function CSBots.UpdateBotRelationships(npc)
-	if not IsValid(npc) then return end
-	local botTeam = npc.BotTeam or TEAM_T
-
-	for _, ply in ipairs(player.GetAll()) do
-		if IsValid(ply) then
-			if ply:Team() == botTeam then
-				npc:AddEntityRelationship(ply, D_LI, 99)
-			else
-				npc:AddEntityRelationship(ply, D_HT, 99)
-			end
-		end
-	end
-
-	for _, other in ipairs(CSBots.List) do
-		if IsValid(other) and other ~= npc then
-			if (other.BotTeam or TEAM_T) == botTeam then
-				npc:AddEntityRelationship(other, D_LI, 99)
-				other:AddEntityRelationship(npc, D_LI, 99)
-			else
-				npc:AddEntityRelationship(other, D_HT, 99)
-				other:AddEntityRelationship(npc, D_HT, 99)
-			end
-		end
-	end
-end
-
--- Обновить отношения всех ботов (при смене команды игроком)
-function CSBots.UpdateAllRelationships()
-	for _, npc in ipairs(CSBots.List) do
-		CSBots.UpdateBotRelationships(npc)
-	end
-end
+-- У workshop CS:GO ботов встроенный AI — они сами определяют врагов по своей логике
+function CSBots.UpdateAllRelationships() end
 
 -- ============================================================
 -- СПАВН БОТА
@@ -91,11 +56,6 @@ function CSBots.SpawnBot(team)
 	npc:DropToFloor()
 
 	table.insert(CSBots.List, npc)
-
-	-- Устанавливаем отношения после инициализации NPC
-	timer.Simple(0.2, function()
-		CSBots.UpdateBotRelationships(npc)
-	end)
 
 	return npc
 end
@@ -195,13 +155,11 @@ end)
 hook.Add("CSBots_PlayerPickedTeam", "CSBots_AutoFill", function(ply, newTeam)
 	if newTeam ~= TEAM_T and newTeam ~= TEAM_CT then return end
 	CSBots.BalanceTeams()
-	timer.Simple(0.3, CSBots.UpdateAllRelationships)
 end)
 
 hook.Add("PlayerChangedTeam", "CSBots_Balance", function(ply, old, new)
 	if new ~= TEAM_T and new ~= TEAM_CT then return end
 	CSBots.BalanceTeams()
-	timer.Simple(0.3, CSBots.UpdateAllRelationships)
 end)
 
 hook.Add("PlayerInitialSpawn", "CSBots_Balance", function()
