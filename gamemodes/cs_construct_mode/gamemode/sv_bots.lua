@@ -154,7 +154,11 @@ function CSBots.BalanceTeams()
 	if not cv_bots_enabled:GetBool() then return end
 	if not cv_bots_autofill:GetBool() then return end
 	local phase = CSConstruct and CSConstruct.Phase
-	if phase == PHASE_LIVE or phase == PHASE_LOBBY then return end
+	if phase == PHASE_LIVE then return end
+
+	-- Не спавним ботов, пока ни один игрок не выбрал команду
+	local totalHumans = CSBots.CountPlayers(TEAM_T) + CSBots.CountPlayers(TEAM_CT)
+	if totalHumans == 0 then return end
 
 	local ppTeam = CS_GetGameModePlayersPerTeam and
 		CS_GetGameModePlayersPerTeam(CSConstruct and CSConstruct.GameMode or GAMEMODE_COMPETITIVE) or 5
