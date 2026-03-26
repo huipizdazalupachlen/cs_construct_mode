@@ -2,17 +2,9 @@ AddCSLuaFile("shared.lua")
 AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("cl_lobby.lua")
 AddCSLuaFile("cl_f4menu.lua")
--- AddCSLuaFile("sv_bots.lua")  -- БОТЫ ВРЕМЕННО ВЫКЛЮЧЕНЫ
 
 include("shared.lua")
--- include("sv_bots.lua")  -- БОТЫ ВРЕМЕННО ВЫКЛЮЧЕНЫ
-
--- Заглушка: CSBots должна существовать даже без sv_bots.lua
-CSBots = CSBots or {}
-CSBots.List = CSBots.List or {}
-CSBots.BalanceTeams = CSBots.BalanceTeams or function() end
-CSBots.RemoveAllBots = CSBots.RemoveAllBots or function() end
-CSBots.CountBots = CSBots.CountBots or function() return 0 end
+include("sv_bots.lua")
 
 DeriveGamemode("base")
 
