@@ -238,10 +238,16 @@ local function cleanupRound()
 		if IsValid(e) then e:Remove() end
 	end
 
-	-- Тела мёртвых workshop-ботов
+	-- Тела мёртвых workshop-ботов (живые и мёртвые по классу)
 	for _, cls in ipairs({"css_bot_t_csgo", "css_bot_ct_csgo"}) do
 		for _, e in ipairs(ents.FindByClass(cls)) do
 			if IsValid(e) then e:Remove() end
+		end
+	end
+	-- Страховка: любые мёртвые NPC (на случай если аддон меняет класс или не удаляет тело)
+	for _, e in ipairs(ents.GetAll()) do
+		if IsValid(e) and e:IsNPC() and not e:IsAlive() then
+			e:Remove()
 		end
 	end
 	if CSBots then CSBots.List = {} end
