@@ -283,9 +283,14 @@ local function startFreezePhase()
 
 	-- Небольшая задержка, чтобы cleanupRound успел отработать
 	timer.Simple(0.5, function()
-		if CSConstruct.Phase == PHASE_FREEZE then
-			CSBots.BalanceTeams()
-		end
+		if CSConstruct.Phase ~= PHASE_FREEZE then return end
+		CSBots.BalanceTeams()
+		-- Замораживаем ботов на время фриз-тайма
+		timer.Simple(0.3, function()
+			for _, bot in ipairs(CSBots.List) do
+				if IsValid(bot) then bot:SetMoveType(MOVETYPE_NONE) end
+			end
+		end)
 	end)
 end
 
@@ -312,6 +317,11 @@ local function startLivePhase()
 				end
 			end
 		end
+	end
+
+	-- Размораживаем ботов
+	for _, bot in ipairs(CSBots.List) do
+		if IsValid(bot) then bot:SetMoveType(MOVETYPE_STEP) end
 	end
 
 	-- Выдаём бомбу случайному живому игроку T стороны
@@ -1072,7 +1082,7 @@ end)
 -- ============================================================
 
 hook.Add("Think", "CSMode_TrainingInfiniteAmmo", function()
-	if not isTrainingMode() then return end
+	if CSConstruct.GameMode ~= GAMEMODE_TRAINING then return end
 	for _, ply in ipairs(player.GetAll()) do
 		if not ply:Alive() then continue end
 		local wep = ply:GetActiveWeapon()
@@ -1089,7 +1099,7 @@ hook.Add("Think", "CSMode_TrainingInfiniteAmmo", function()
 end)
 
 hook.Add("PlayerNoClip", "CSMode_TrainingNoclip", function(ply)
-	if isTrainingMode() and isPlayingTeam(ply:Team()) then
+	if CSConstruct.GameMode == GAMEMODE_TRAINING and isPlayingTeam(ply:Team()) then
 		return true
 	end
 end)
