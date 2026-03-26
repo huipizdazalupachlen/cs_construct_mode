@@ -267,6 +267,19 @@ local function cleanupRound()
 	-- Кровь и декали на клиентах
 	net.Start("CSMode_CleanupDecals")
 	net.Broadcast()
+
+	-- Второй проход с задержкой: рагдоллы ботов могут создаваться асинхронно
+	-- уже после того как NPC-сущность удалена
+	timer.Simple(0.3, function()
+		for _, e in ipairs(ents.FindByClass("prop_ragdoll")) do
+			if IsValid(e) then e:Remove() end
+		end
+		for _, e in ipairs(ents.GetAll()) do
+			if IsValid(e) and e:IsNPC() and not e:IsAlive() then
+				e:Remove()
+			end
+		end
+	end)
 end
 
 local function startFreezePhase()
