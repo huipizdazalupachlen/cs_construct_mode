@@ -457,8 +457,17 @@ end
 
 -- Fallback: разделить info_player_* по координате X
 function CS_GetFallbackSpawnPoints(teamId)
+	-- Сначала пробуем найти точные сущности для команды
+	local teamClass = (teamId == TEAM_T) and "info_player_terrorist" or "info_player_counterterrorist"
+	local out = {}
+	for _, e in ipairs(ents.FindByClass(teamClass)) do
+		table.insert(out, { pos = e:GetPos(), ang = e:GetAngles() })
+	end
+	if #out > 0 then return out end
+
+	-- Fallback: общие точки спавна делим по X (только если нет team-specific)
 	local entsList = {}
-	for _, c in ipairs({ "info_player_start", "info_player_deathmatch", "info_player_counterterrorist", "info_player_terrorist" }) do
+	for _, c in ipairs({ "info_player_start", "info_player_deathmatch" }) do
 		for _, e in ipairs(ents.FindByClass(c)) do
 			table.insert(entsList, e)
 		end
@@ -467,7 +476,6 @@ function CS_GetFallbackSpawnPoints(teamId)
 	table.sort(entsList, function(a, b) return a:GetPos().x < b:GetPos().x end)
 	local mid = math.ceil(#entsList / 2)
 	local bucket = teamId == TEAM_T and 1 or 2
-	local out = {}
 	if bucket == 1 then
 		for i = 1, mid do
 			local e = entsList[i]

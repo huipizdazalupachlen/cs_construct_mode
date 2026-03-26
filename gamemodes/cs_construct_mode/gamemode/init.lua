@@ -1023,6 +1023,11 @@ net.Receive("CSMode_StartGame", function(_, ply)
 	if canStart then
 		PrintMessage(HUD_PRINTTALK, "=== ИГРА НАЧИНАЕТСЯ! ===")
 		PrintMessage(HUD_PRINTTALK, "Режим: " .. CS_GetGameModeName(CSConstruct.GameMode))
+		-- Сбрасываем деньги всем игрокам до стартовых (защита от сохранённых значений)
+		local startMoney = math.Clamp(cv_start_money:GetInt(), 0, 16000)
+		for _, p in ipairs(player.GetAll()) do
+			p.CSMode_Money = startMoney
+		end
 		CSConstruct.Phase = PHASE_WAITING
 		broadcastState()
 		timer.Simple(2, function()
