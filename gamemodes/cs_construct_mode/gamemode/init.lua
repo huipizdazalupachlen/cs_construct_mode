@@ -883,6 +883,23 @@ function GM:PlayerCanPickupWeapon(ply, wep)
 	return true
 end
 
+-- Отладка: вывести все сущности в мире (запускать после смерти бота)
+concommand.Add("cs_debug_ents", function(ply)
+	if not IsValid(ply) or not ply:IsAdmin() then return end
+	local counts = {}
+	for _, e in ipairs(ents.GetAll()) do
+		if not IsValid(e) then continue end
+		local cls = e:GetClass()
+		counts[cls] = (counts[cls] or 0) + 1
+	end
+	local out = {}
+	for cls, n in pairs(counts) do
+		table.insert(out, cls .. " x" .. n)
+	end
+	table.sort(out)
+	ply:PrintMessage(HUD_PRINTCONSOLE, "=== ENTITIES IN WORLD ===\n" .. table.concat(out, "\n") .. "\n=========================\n")
+end)
+
 -- Применить перчатки без рестарта: перезагружает руки игрока
 concommand.Add("cs_apply_hands", function(ply)
 	if not IsValid(ply) then return end
