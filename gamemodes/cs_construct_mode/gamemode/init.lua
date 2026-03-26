@@ -32,6 +32,12 @@ local cv_freeze = CreateConVar("cs_construct_freeze_time", "12", { FCVAR_ARCHIVE
 local cv_round = CreateConVar("cs_construct_round_time", "120", { FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY }, "Длительность раунда (сек)")
 local cv_end_delay = CreateConVar("cs_construct_round_end_delay", "5", { FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY }, "Пауза после раунда (сек)")
 local cv_start_money = CreateConVar("cs_construct_start_money", "800", { FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY }, "Стартовые деньги")
+-- Если FCVAR_ARCHIVE сохранил мусорное значение — сбрасываем на 800
+timer.Simple(0, function()
+	if cv_start_money:GetInt() > 16000 or cv_start_money:GetInt() < 0 then
+		RunConsoleCommand("cs_construct_start_money", "800")
+	end
+end)
 local cv_win_money = CreateConVar("cs_construct_win_money", "3250", { FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY }, "Бонус за победу в раунде")
 local cv_lose_money = CreateConVar("cs_construct_lose_money", "1400", { FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY }, "Бонус за поражение")
 local cv_kill = CreateConVar("cs_construct_kill_reward", "300", { FCVAR_ARCHIVE, FCVAR_REPLICATED, FCVAR_NOTIFY }, "Награда за убийство")
@@ -157,10 +163,25 @@ local function broadcastLobbyUpdate()
 	net.Broadcast()
 end
 
+-- Выдаёт запасные патроны для оружия (3 полных магазина в резерв)
+local function giveWeaponAmmo(ply, wep)
+	if not IsValid(ply) or not IsValid(wep) then return end
+	local ammoType = wep:GetPrimaryAmmoType()
+	if ammoType < 0 then return end
+	local clipSize = wep:GetMaxClip1()
+	if clipSize <= 0 then return end
+	-- Устанавливаем резерв = 3 магазина (как в CS:GO у большинства оружия)
+	local desiredReserve = clipSize * 3
+	local currentReserve = ply:GetAmmoCount(ammoType)
+	if currentReserve < desiredReserve then
+		ply:GiveAmmo(desiredReserve - currentReserve, ammoType, true)
+	end
+end
+
 local function giveRoundLoadout(ply)
 	if not IsValid(ply) or not ply:Alive() then return end
-	ply:StripAmmo()
 	ply:StripWeapons()
+	ply:RemoveAllAmmo()
 	-- Выдаем нож игрока (выбирается один раз при первом спавне)
 	if not ply.CSMode_Knife then
 		ply.CSMode_Knife = CS_GetRandomKnife()
@@ -271,7 +292,10 @@ local function startFreezePhase()
 
 			-- Восстанавливаем оружие после StripWeapons
 			for _, cls in ipairs(savedWeapons) do
-				p:Give(cls)
+				local wep = p:Give(cls)
+				if IsValid(wep) then
+					giveWeaponAmmo(p, wep)
+				end
 			end
 		end
 	end
@@ -309,13 +333,6 @@ local function startLivePhase()
 	for _, p in ipairs(player.GetAll()) do
 		if IsValid(p) and p:Alive() and isPlayingTeam(p:Team()) then
 			p.CSMode_Frozen = false
-			-- Разблокируем стрельбу для ВСЕХ оружий в инвентаре
-			for _, wep in ipairs(p:GetWeapons()) do
-				if IsValid(wep) then
-					wep:SetNextPrimaryFire(CurTime())
-					wep:SetNextSecondaryFire(CurTime())
-				end
-			end
 		end
 	end
 
@@ -575,7 +592,7 @@ function GM:Think()
 end
 
 function GM:PlayerInitialSpawn(ply)
-	ply.CSMode_Money = cv_start_money:GetInt()
+	ply.CSMode_Money = math.Clamp(cv_start_money:GetInt(), 0, 16000)
 	ply.CSMode_NeedTeam = true
 	ply:SetTeam(TEAM_SPECTATOR)
 	timer.Simple(0.5, function()
@@ -642,10 +659,14 @@ function GM:PlayerSpawn(ply)
 end
 
 function GM:PlayerLoadout(ply)
+	local wep
 	if ply:Team() == TEAM_CT then
-		ply:Give("weapon_swcs_usp_silencer")
+		wep = ply:Give("weapon_swcs_usp_silencer")
 	elseif ply:Team() == TEAM_T then
-		ply:Give("weapon_swcs_glock")
+		wep = ply:Give("weapon_swcs_glock")
+	end
+	if IsValid(wep) then
+		giveWeaponAmmo(ply, wep)
 	end
 	return true
 end
@@ -802,12 +823,12 @@ net.Receive("CSMode_BuyWeapon", function(_, ply)
 
 	local newWep = ply:Give(cls)
 
-	-- Автоматически переключаемся на купленное оружие
+	-- Выдаём запасные патроны
 	if IsValid(newWep) then
+		giveWeaponAmmo(ply, newWep)
+		-- Автоматически переключаемся на купленное оружие
 		ply:SelectWeapon(cls)
 	end
-
-	-- ARC9 автоматически управляет патронами, не нужно выдавать вручную
 
 	syncState(ply)
 end)
@@ -836,13 +857,6 @@ function GM:Move(ply, mv)
 	end
 end
 
-function GM:EntityFireBullets(ent, data)
-	-- Блокировка стрельбы во время фриз-тайма
-	if IsValid(ent) and ent:IsPlayer() and CSConstruct.Phase == PHASE_FREEZE then
-		return false
-	end
-end
-
 function GM:PlayerCanPickupWeapon(ply, wep)
 	-- Разрешаем подбирать оружие во время фриз-тайма
 	return true
@@ -861,17 +875,6 @@ function GM:PlayerNoClip(ply, desiredState)
 	return false
 end
 
-hook.Add("PlayerSwitchWeapon", "CSConstruct_BlockShootFreeze", function(ply, oldwep, newwep)
-	-- Блокируем атаку оружия во время фриз-тайма
-	if CSConstruct.Phase == PHASE_FREEZE and IsValid(newwep) then
-		timer.Simple(0, function()
-			if IsValid(newwep) then
-				newwep:SetNextPrimaryFire(CurTime() + 999)
-				newwep:SetNextSecondaryFire(CurTime() + 999)
-			end
-		end)
-	end
-end)
 
 -- Реалистичные звуки шагов
 local footstepSounds = {
@@ -1048,15 +1051,20 @@ end)
 -- ЗОНЫ УСТАНОВКИ БОМБЫ
 -- ============================================================
 
--- Блокируем IN_ATTACK для C4 вне зоны (до обработки оружием)
 function GM:StartCommand(ply, cmd)
-	if CSConstruct.Phase ~= PHASE_LIVE then return end
-	if ply:Team() ~= TEAM_T or not ply:Alive() then return end
-	local wep = ply:GetActiveWeapon()
-	if not IsValid(wep) or wep:GetClass() ~= "weapon_swcs_c4" then return end
-	if not CS_IsInBombZone(ply:GetPos()) then
+	-- Блокировка стрельбы во время фриз-тайма
+	if CSConstruct.Phase == PHASE_FREEZE and isPlayingTeam(ply:Team()) then
 		cmd:RemoveKey(IN_ATTACK)
 		cmd:RemoveKey(IN_ATTACK2)
+		return
+	end
+	-- Блокируем IN_ATTACK для C4 вне бомб-зоны
+	if CSConstruct.Phase == PHASE_LIVE and ply:Team() == TEAM_T and ply:Alive() then
+		local wep = ply:GetActiveWeapon()
+		if IsValid(wep) and wep:GetClass() == "weapon_swcs_c4" and not CS_IsInBombZone(ply:GetPos()) then
+			cmd:RemoveKey(IN_ATTACK)
+			cmd:RemoveKey(IN_ATTACK2)
+		end
 	end
 end
 

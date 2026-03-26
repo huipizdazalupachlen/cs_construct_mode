@@ -16,8 +16,26 @@ local BOT_CLASS = {
 	[TEAM_CT] = "css_bot_ct_csgo",
 }
 
--- У workshop CS:GO ботов встроенный AI — они сами определяют врагов по своей логике
-function CSBots.UpdateAllRelationships() end
+
+-- ============================================================
+-- ЗАПРЕТ АТАКИ СОЮЗНИКОВ (NPC → Player)
+-- CanNPCAttack: если возвращает false — NPC вообще не атакует цель
+-- (не целится, не стреляет, не преследует как врага).
+-- ============================================================
+
+hook.Add("CanNPCAttack", "CSBots_FriendlyFire", function(npc, ent)
+	if not IsValid(npc) or not IsValid(ent) then return end
+	local botTeam = npc.BotTeam
+	if not botTeam then return end
+	-- Запрещаем атаку союзника-игрока
+	if ent:IsPlayer() and ent:Team() == botTeam then
+		return false
+	end
+	-- Запрещаем атаку союзника-бота
+	if ent.BotTeam and ent.BotTeam == botTeam then
+		return false
+	end
+end)
 
 -- ============================================================
 -- СПАВН БОТА
@@ -147,6 +165,7 @@ timer.Create("CSBots_CleanList", 2, 0, function()
 		end
 	end
 end)
+
 
 -- ============================================================
 -- ХУКИ БАЛАНСИРОВКИ И ОТНОШЕНИЙ

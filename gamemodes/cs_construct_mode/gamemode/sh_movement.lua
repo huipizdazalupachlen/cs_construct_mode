@@ -69,6 +69,7 @@ local WALK_SPEED         = 140   -- Shift: тихий шаг
 local KNIFE_SPEED        = 260   -- голые руки / нож
 local JUMP_COOLDOWN      = 0.45  -- задержка между прыжками (анти-бхоп, CS:GO ~0.5s)
 local SNIPER_SCOPED_SPEED = 90   -- скорость при прицеливании в снайперский прицел
+local DUCK_SPEED_MULT    = 0.34  -- множитель скорости в присяде (CS:GO: ~34% от макс.)
 
 local SNIPER_CLASSES = {
 	["weapon_swcs_awp"]    = true,
@@ -129,6 +130,11 @@ function GM:SetupMove(ply, mv, cmd)
 	if cmd:KeyDown(IN_SPEED) then
 		-- Shift зажат — тихий шаг
 		maxSpeed = WALK_SPEED
+	end
+
+	-- Присяд: снижаем скорость как в CS:GO (~34% от максимальной)
+	if ply:Crouching() then
+		maxSpeed = maxSpeed * DUCK_SPEED_MULT
 	end
 
 	mv:SetMaxClientSpeed(maxSpeed)
