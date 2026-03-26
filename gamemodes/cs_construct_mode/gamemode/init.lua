@@ -2,6 +2,8 @@ AddCSLuaFile("shared.lua")
 AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("cl_lobby.lua")
 AddCSLuaFile("cl_f4menu.lua")
+AddCSLuaFile("cl_radar.lua")
+AddCSLuaFile("sh_movement.lua")
 
 include("shared.lua")
 include("sv_bots.lua")
