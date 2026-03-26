@@ -59,10 +59,16 @@ end
 -- ============================================================
 
 function CSBots.SpawnBot(team)
-	if not cv_bots_enabled:GetBool() then return end
+	if not cv_bots_enabled:GetBool() then
+		print("[CS Bots] SpawnBot: боты отключены (convar)")
+		return
+	end
 
 	local cls = BOT_CLASS[team]
-	if not cls then return end
+	if not cls then
+		print("[CS Bots] SpawnBot: неизвестная команда " .. tostring(team))
+		return
+	end
 
 	local pos, ang = CS_PickTeamSpawn(team)
 	if not pos then
@@ -70,9 +76,10 @@ function CSBots.SpawnBot(team)
 		return
 	end
 
+	print("[CS Bots] Создаём " .. cls .. " на позиции " .. tostring(pos))
 	local npc = ents.Create(cls)
 	if not IsValid(npc) then
-		print("[CS Bots] ОШИБКА: не удалось создать " .. cls)
+		print("[CS Bots] ОШИБКА: ents.Create(\"" .. cls .. "\") вернул невалидный entity — мод на ботов не загружен?")
 		return
 	end
 
@@ -146,15 +153,19 @@ end
 function CSBots.BalanceTeams()
 	if not cv_bots_enabled:GetBool() then return end
 	if not cv_bots_autofill:GetBool() then return end
-	if CSConstruct and (CSConstruct.Phase == PHASE_LIVE or CSConstruct.Phase == PHASE_LOBBY) then return end
+	local phase = CSConstruct and CSConstruct.Phase
+	if phase == PHASE_LIVE or phase == PHASE_LOBBY then return end
 
 	local ppTeam = CS_GetGameModePlayersPerTeam and
 		CS_GetGameModePlayersPerTeam(CSConstruct and CSConstruct.GameMode or GAMEMODE_COMPETITIVE) or 5
+
+	print("[CS Bots] BalanceTeams: фаза=" .. tostring(phase) .. " ppTeam=" .. ppTeam)
 
 	for _, tid in ipairs({TEAM_T, TEAM_CT}) do
 		local humans = CSBots.CountPlayers(tid)
 		local bots   = CSBots.CountBots(tid)
 		local needed = math.max(0, ppTeam - humans)
+		print("[CS Bots]  команда=" .. tid .. " люди=" .. humans .. " боты=" .. bots .. " нужно=" .. needed)
 		while bots < needed do CSBots.SpawnBot(tid) bots = bots + 1 end
 		while bots > needed do CSBots.RemoveBot(tid) bots = bots - 1 end
 	end
@@ -227,6 +238,23 @@ end)
 concommand.Add("cs_bot_list", function(ply)
 	if not IsValid(ply) then return end
 	ply:ChatPrint("T: " .. CSBots.CountBots(TEAM_T) .. " | CT: " .. CSBots.CountBots(TEAM_CT))
+end)
+
+-- Диагностика: cs_bot_debug в консоли сервера
+concommand.Add("cs_bot_debug", function()
+	print("[CS Bots] === ДИАГНОСТИКА ===")
+	print("[CS Bots] enabled=" .. tostring(cv_bots_enabled:GetBool()))
+	print("[CS Bots] autofill=" .. tostring(cv_bots_autofill:GetBool()))
+	print("[CS Bots] CSConstruct.Phase=" .. tostring(CSConstruct and CSConstruct.Phase))
+	print("[CS Bots] GameMode=" .. tostring(CSConstruct and CSConstruct.GameMode))
+	print("[CS Bots] CSBots.List size=" .. #CSBots.List)
+	print("[CS Bots] css_bot_t_csgo registered=" .. tostring(scripted_ents.GetList()["css_bot_t_csgo"] ~= nil))
+	print("[CS Bots] css_bot_ct_csgo registered=" .. tostring(scripted_ents.GetList()["css_bot_ct_csgo"] ~= nil))
+	local tSpawn, _ = CS_PickTeamSpawn(TEAM_T)
+	local ctSpawn, _ = CS_PickTeamSpawn(TEAM_CT)
+	print("[CS Bots] Спавн T: " .. tostring(tSpawn))
+	print("[CS Bots] Спавн CT: " .. tostring(ctSpawn))
+	print("[CS Bots] ====================")
 end)
 
 print("[CS Construct] sv_bots.lua загружен")
