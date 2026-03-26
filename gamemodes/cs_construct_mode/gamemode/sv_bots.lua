@@ -1,30 +1,58 @@
 --[[
 	CS Construct — Система ботов
-	Боты: cs_construct_bot (base_ai + nav mesh A* навигация)
-	Стрельба через Source engine AI (совместим с arc9)
+	Использует готовые NPC из workshop-мода CS:GO ботов:
+	  css_bot_t_csgo  — T-сторона
+	  css_bot_ct_csgo — CT-сторона
 ]]
 
 CSBots = CSBots or {}
 CSBots.List = CSBots.List or {}
 
-local cv_bots_enabled    = CreateConVar("cs_construct_bots_enabled",    "1", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Включить ботов")
-local cv_bots_difficulty = CreateConVar("cs_construct_bots_difficulty", "2", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Сложность ботов (1-3)")
-local cv_bots_autofill   = CreateConVar("cs_construct_bots_autofill",   "1", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Автозаполнение мест ботами")
+local cv_bots_enabled  = CreateConVar("cs_construct_bots_enabled",  "1", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Включить ботов")
+local cv_bots_autofill = CreateConVar("cs_construct_bots_autofill", "1", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Автозаполнение мест ботами")
 
--- ============================================================
--- МОДЕЛИ
--- ============================================================
-
-local BOT_MODELS = {
-	[TEAM_T] = {
-		"models/humans/group03/male_01.mdl", "models/humans/group03/male_02.mdl",
-		"models/humans/group03/male_03.mdl", "models/humans/group03/male_04.mdl",
-	},
-	[TEAM_CT] = {
-		"models/humans/group01/male_01.mdl", "models/humans/group01/male_02.mdl",
-		"models/humans/group01/male_03.mdl", "models/humans/group01/male_04.mdl",
-	},
+local BOT_CLASS = {
+	[TEAM_T]  = "css_bot_t_csgo",
+	[TEAM_CT] = "css_bot_ct_csgo",
 }
+
+-- ============================================================
+-- ОТНОШЕНИЯ БОТА К ИГРОКАМ И ДРУГИМ БОТАМ
+-- ============================================================
+
+function CSBots.UpdateBotRelationships(npc)
+	if not IsValid(npc) then return end
+	local botTeam = npc.BotTeam or TEAM_T
+
+	for _, ply in ipairs(player.GetAll()) do
+		if IsValid(ply) then
+			if ply:Team() == botTeam then
+				npc:AddEntityRelationship(ply, D_LI, 99)
+			else
+				npc:AddEntityRelationship(ply, D_HT, 99)
+			end
+		end
+	end
+
+	for _, other in ipairs(CSBots.List) do
+		if IsValid(other) and other ~= npc then
+			if (other.BotTeam or TEAM_T) == botTeam then
+				npc:AddEntityRelationship(other, D_LI, 99)
+				other:AddEntityRelationship(npc, D_LI, 99)
+			else
+				npc:AddEntityRelationship(other, D_HT, 99)
+				other:AddEntityRelationship(npc, D_HT, 99)
+			end
+		end
+	end
+end
+
+-- Обновить отношения всех ботов (при смене команды игроком)
+function CSBots.UpdateAllRelationships()
+	for _, npc in ipairs(CSBots.List) do
+		CSBots.UpdateBotRelationships(npc)
+	end
+end
 
 -- ============================================================
 -- СПАВН БОТА
@@ -33,36 +61,33 @@ local BOT_MODELS = {
 function CSBots.SpawnBot(team)
 	if not cv_bots_enabled:GetBool() then return end
 
+	local cls = BOT_CLASS[team]
+	if not cls then return end
+
 	local pos, ang = CS_PickTeamSpawn(team)
 	if not pos then
 		print("[CS Bots] ОШИБКА: нет точки спавна для команды " .. team)
 		return
 	end
 
-	local npc = ents.Create("cs_construct_bot")
+	local npc = ents.Create(cls)
 	if not IsValid(npc) then
-		print("[CS Bots] ОШИБКА: не удалось создать cs_construct_bot")
+		print("[CS Bots] ОШИБКА: не удалось создать " .. cls)
 		return
 	end
 
-	-- Параметры до спавна — entity читает их в Initialize()
-	npc.BotTeam      = team
-	npc.CSMode_Money = 800
-
-	local models = BOT_MODELS[team] or BOT_MODELS[TEAM_T]
-	npc.BotModel = models[math.random(#models)]
-
+	npc.BotTeam = team
 	npc:SetPos(pos + Vector(0, 0, 10))
 	npc:SetAngles(ang)
 	npc:Spawn()
 	npc:Activate()
 	npc:DropToFloor()
 
-	-- Стартовое оружие
-	local pistol = (team == TEAM_T) and "weapon_swcs_glock" or "weapon_swcs_usp_silencer"
-	timer.Simple(0.3, function()
-		if not IsValid(npc) then return end
-		npc:Give(pistol)
+	table.insert(CSBots.List, npc)
+
+	-- Устанавливаем отношения после инициализации NPC
+	timer.Simple(0.2, function()
+		CSBots.UpdateBotRelationships(npc)
 	end)
 
 	return npc
@@ -89,6 +114,13 @@ function CSBots.RemoveAllBots()
 		if IsValid(npc) then npc:Remove() end
 	end
 	CSBots.List = {}
+
+	-- Убираем всех workshop-ботов (в т.ч. тех, кого не было в списке)
+	for _, cls in ipairs({"css_bot_t_csgo", "css_bot_ct_csgo"}) do
+		for _, e in ipairs(ents.FindByClass(cls)) do
+			if IsValid(e) then e:Remove() end
+		end
+	end
 end
 
 function CSBots.CountBots(team)
@@ -129,39 +161,32 @@ function CSBots.BalanceTeams()
 end
 
 -- ============================================================
--- ОЧИСТКА СПИСКА
+-- ОЧИСТКА СПИСКА (мёртвые NPC убираем из отслеживания)
 -- ============================================================
 
 timer.Create("CSBots_CleanList", 2, 0, function()
 	for i = #CSBots.List, 1, -1 do
-		if not IsValid(CSBots.List[i]) then table.remove(CSBots.List, i) end
-	end
-end)
-
--- ============================================================
--- СБРОС РАУНДА
--- ============================================================
-
-hook.Add("CSConstruct_FreezeStart", "CSBots_ResetAI", function()
-	for _, npc in ipairs(CSBots.List) do
-		if IsValid(npc) and npc.ResetForNewRound then
-			npc:ResetForNewRound()
+		local bot = CSBots.List[i]
+		if not IsValid(bot) or bot:Health() <= 0 then
+			table.remove(CSBots.List, i)
 		end
 	end
 end)
 
 -- ============================================================
--- ХУКИ БАЛАНСИРОВКИ
+-- ХУКИ БАЛАНСИРОВКИ И ОТНОШЕНИЙ
 -- ============================================================
 
 hook.Add("CSBots_PlayerPickedTeam", "CSBots_AutoFill", function(ply, newTeam)
 	if newTeam ~= TEAM_T and newTeam ~= TEAM_CT then return end
 	CSBots.BalanceTeams()
+	timer.Simple(0.3, CSBots.UpdateAllRelationships)
 end)
 
 hook.Add("PlayerChangedTeam", "CSBots_Balance", function(ply, old, new)
 	if new ~= TEAM_T and new ~= TEAM_CT then return end
 	CSBots.BalanceTeams()
+	timer.Simple(0.3, CSBots.UpdateAllRelationships)
 end)
 
 hook.Add("PlayerInitialSpawn", "CSBots_Balance", function()
@@ -203,23 +228,5 @@ concommand.Add("cs_bot_list", function(ply)
 	if not IsValid(ply) then return end
 	ply:ChatPrint("T: " .. CSBots.CountBots(TEAM_T) .. " | CT: " .. CSBots.CountBots(TEAM_CT))
 end)
-
--- ============================================================
--- ГЕНЕРАЦИЯ NAV MESH
--- ============================================================
-
---[[ ВРЕМЕННО ОТКЛЮЧЕНО
-hook.Add("InitPostEntity", "CSBots_EnsureNavMesh", function()
-	timer.Simple(3, function()
-		if navmesh.IsLoaded() then
-			local areas = navmesh.GetAllNavAreas()
-			print("[CS Bots] Nav mesh загружен (" .. #areas .. " зон). Боты могут навигировать.")
-			return
-		end
-		print("[CS Bots] Nav mesh отсутствует! Запускаю nav_generate...")
-		RunConsoleCommand("nav_generate")
-	end)
-end)
-]]
 
 print("[CS Construct] sv_bots.lua загружен")

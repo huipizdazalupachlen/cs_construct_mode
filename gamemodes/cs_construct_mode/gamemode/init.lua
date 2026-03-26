@@ -215,18 +215,13 @@ local function cleanupRound()
 		if IsValid(e) then e:Remove() end
 	end
 
-	-- Тела мёртвых ботов: все cs_construct_bot, которых нет в активном списке CSBots.List
-	-- (мёртвые боты удаляются из списка в OnKilled, живые — остаются)
-	if CSBots and CSBots.List then
-		for _, e in ipairs(ents.FindByClass("cs_construct_bot")) do
-			if not IsValid(e) then continue end
-			local isActive = false
-			for _, bot in ipairs(CSBots.List) do
-				if bot == e then isActive = true break end
-			end
-			if not isActive then e:Remove() end
+	-- Тела мёртвых workshop-ботов
+	for _, cls in ipairs({"css_bot_t_csgo", "css_bot_ct_csgo"}) do
+		for _, e in ipairs(ents.FindByClass(cls)) do
+			if IsValid(e) then e:Remove() end
 		end
 	end
+	if CSBots then CSBots.List = {} end
 
 	-- Заложенная бомба
 	for _, e in ipairs(ents.FindByClass("swcs_planted_c4")) do
@@ -281,33 +276,17 @@ local function startFreezePhase()
 		end
 	end
 
-	-- Респавн ботов (NPC)
-	for _, bot in ipairs(CSBots.List) do
-		if IsValid(bot) then
-			-- Восстанавливаем здоровье
-			bot:SetHealth(100)
-			
-			-- Очищаем оружие (StripWeapons — только для игроков, для NPC удаляем вручную)
-			for _, wep in ipairs(bot:GetWeapons()) do
-				if IsValid(wep) then wep:Remove() end
-			end
-
-			-- Нож + дефолтный пистолет команды (как при спавне)
-			bot:Give("weapon_crowbar")
-			local defaultPistol = ((bot.BotTeam or TEAM_T) == TEAM_T) and "weapon_swcs_glock" or "weapon_swcs_usp_silencer"
-			bot:Give(defaultPistol)
-			
-			-- Телепортируем на спавн
-			local pos, ang = CS_PickTeamSpawn(bot.BotTeam or TEAM_T)
-			bot:SetPos(pos + Vector(0, 0, 10))
-			bot:SetAngles(ang)
-			
-			-- Сбрасываем таймер покупки
-			bot.CSMode_LastBuyTime = 0
-		end
-	end
+	-- Боты: удаляем старых, спавним свежих через BalanceTeams
+	CSBots.RemoveAllBots()
 
 	broadcastState()
+
+	-- Небольшая задержка, чтобы cleanupRound успел отработать
+	timer.Simple(0.5, function()
+		if CSConstruct.Phase == PHASE_FREEZE then
+			CSBots.BalanceTeams()
+		end
+	end)
 end
 
 local function startLivePhase()
@@ -537,6 +516,49 @@ end)
 
 -- Если CT убиты пока бомба заложена — T всё равно должны выиграть по взрыву,
 -- но если CT убиты до закладки — победа T по элиминации уже обрабатывается выше.
+
+-- ============================================================
+-- НАГРАДА ЗА УБИЙСТВО БОТА
+-- ============================================================
+
+hook.Add("NPCKilled", "CSMode_BotKillReward", function(npc, attacker, inflictor)
+	if CSConstruct.Phase ~= PHASE_LIVE then return end
+
+	-- Проверяем, что это наш отслеживаемый бот
+	local botTeam = nil
+	for _, b in ipairs(CSBots.List) do
+		if b == npc then
+			botTeam = b.BotTeam or TEAM_T
+			break
+		end
+	end
+	if not botTeam then return end
+
+	-- Килл-фид
+	if IsValid(attacker) and attacker:IsPlayer() then
+		local wepClass = ""
+		local wep = attacker:GetActiveWeapon()
+		if IsValid(wep) then wepClass = wep:GetClass() end
+		local isSuicide = (attacker == npc)
+		net.Start("CSMode_KillFeedEntry")
+		net.WriteString(attacker:Nick())
+		net.WriteUInt(attacker:Team(), 8)
+		net.WriteUInt(attacker:EntIndex(), 16)
+		net.WriteString(npc:GetClass() == "css_bot_ct_csgo" and "BOT CT" or "BOT T")
+		net.WriteUInt(botTeam, 8)
+		net.WriteUInt(0, 16)
+		net.WriteString(wepClass)
+		net.WriteBool(false)
+		net.WriteBool(isSuicide)
+		net.Broadcast()
+	end
+
+	-- Денежная награда
+	if IsValid(attacker) and attacker:IsPlayer() and attacker:Team() ~= botTeam then
+		attacker.CSMode_Money = (attacker.CSMode_Money or 0) + cv_kill:GetInt()
+		syncState(attacker)
+	end
+end)
 
 function GM:Think()
 	-- round think via timer; reserved for extensions
