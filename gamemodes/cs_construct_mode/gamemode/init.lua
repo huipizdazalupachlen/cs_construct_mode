@@ -223,10 +223,10 @@ local function cleanupRound()
 		if IsValid(e) then e:Remove() end
 	end
 
-	-- Тела мёртвых ботов: все npc_citizen, которых нет в активном списке CSBots.List
-	-- (мёртвые боты удаляются из списка в OnNPCKilled, живые — остаются)
+	-- Тела мёртвых ботов: все cs_construct_bot, которых нет в активном списке CSBots.List
+	-- (мёртвые боты удаляются из списка в OnKilled, живые — остаются)
 	if CSBots and CSBots.List then
-		for _, e in ipairs(ents.FindByClass("npc_citizen")) do
+		for _, e in ipairs(ents.FindByClass("cs_construct_bot")) do
 			if not IsValid(e) then continue end
 			local isActive = false
 			for _, bot in ipairs(CSBots.List) do

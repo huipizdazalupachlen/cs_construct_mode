@@ -500,6 +500,18 @@ function ENT:BuyWeapons()
 	local pools = (ROLE_WEAPONS[role] or ROLE_WEAPONS["default"])[team]
 	if not pools then self.BotHasBought = true return end
 
+	-- Раунд 1 — пистольный (как в CS:GO): только эко, независимо от денег
+	local roundNum = CSConstruct and CSConstruct.RoundNum or 1
+	if roundNum == 1 then
+		local eco = pools.eco
+		if eco and #eco > 0 then
+			self:Give(eco[math.random(#eco)])
+		end
+		self.BotHasBought      = true
+		self.CSMode_LastBuyTime = CurTime()
+		return
+	end
+
 	local hasRifle = false
 	for _, wep in ipairs(self:GetWeapons()) do
 		if IsValid(wep) then
@@ -553,6 +565,7 @@ function ENT:OnKilled(dmginfo)
 			net.WriteFloat(CSConstruct.PhaseEndsAt)
 			net.WriteFloat(CSConstruct.RoundEndsAt)
 			net.WriteUInt(math.Clamp(attacker.CSMode_Money or 0, 0, 999999), 32)
+			net.WriteUInt(CSConstruct.GameMode or GAMEMODE_COMPETITIVE, 8)
 			net.Send(attacker)
 		end
 	end

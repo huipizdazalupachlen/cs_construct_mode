@@ -7,7 +7,7 @@
 CSBots = CSBots or {}
 CSBots.List = CSBots.List or {}
 
-local cv_bots_enabled    = CreateConVar("cs_construct_bots_enabled",    "0", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Включить ботов")
+local cv_bots_enabled    = CreateConVar("cs_construct_bots_enabled",    "1", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Включить ботов")
 local cv_bots_difficulty = CreateConVar("cs_construct_bots_difficulty", "2", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Сложность ботов (1-3)")
 local cv_bots_autofill   = CreateConVar("cs_construct_bots_autofill",   "1", {FCVAR_ARCHIVE, FCVAR_NOTIFY}, "Автозаполнение мест ботами")
 
