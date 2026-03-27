@@ -112,22 +112,30 @@ local function drawPlayerCircle(px, py, r, col)
 	surface.DrawPoly(poly)
 end
 
--- Arrow/chevron for local player (pointing in direction yaw_deg)
-local function drawPlayerArrow(px, py, yaw_deg, r, col)
+-- Circle + FOV cone (CS:GO-style local player icon).
+-- Cone winding: center → right-edge → left-edge = CW in screen (Y-down). ✓
+local FOV_HALF    = math.rad(45)   -- half of 90° view cone
+local CONE_LENGTH = 2.6            -- cone length in multiples of circle radius
+local function drawPlayerWithFOV(px, py, yaw_deg, r, col)
 	local rad  = math.rad(yaw_deg)
-	local s    = math.sin(rad)
-	local c    = math.cos(rad)
-	local tipX = px + s * r * 1.4
-	local tipY = py - c * r * 1.4
-	local bx   = px - s * r
-	local by   = py + c * r
+	local la   = rad - FOV_HALF
+	local ra   = rad + FOV_HALF
+	local clen = r * CONE_LENGTH
+	local lx   = px + math.sin(la) * clen
+	local ly   = py - math.cos(la) * clen
+	local rx   = px + math.sin(ra) * clen
+	local ry   = py - math.cos(ra) * clen
 	draw.NoTexture()
+	-- Filled cone (semi-transparent)
+	surface.SetDrawColor(col.r, col.g, col.b, math.floor((col.a or 255) * 0.38))
+	surface.DrawPoly({ { x = px, y = py }, { x = rx, y = ry }, { x = lx, y = ly } })
+	-- Solid circle on top
+	local poly = {}
+	for i = 1, ICO_SEGS do
+		poly[i] = { x = px + _icoPoly[i].x * r, y = py + _icoPoly[i].y * r }
+	end
 	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
-	surface.DrawPoly({
-		{ x = tipX,               y = tipY               },
-		{ x = bx + c * r * 0.85, y = by + s * r * 0.85  },
-		{ x = bx - c * r * 0.85, y = by - s * r * 0.85  },
-	})
+	surface.DrawPoly(poly)
 end
 
 -- ============================================================
@@ -255,8 +263,8 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 	end
 
 	-- ---- Icons ----
-	local triR  = math.max(4, math.floor(innerR * 0.048))  -- other players: circle radius
-	local selfR = triR + 2                                   -- local player: arrow size
+	local dotR  = math.max(4, math.floor(innerR * 0.048))  -- teammate / enemy circle radius
+	local selfR = dotR + 2                                   -- local player circle radius
 
 	-- Players
 	for _, ply in ipairs(player.GetAll()) do
@@ -266,13 +274,14 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 
 		local isSelf  = ply == lp
 		local isEnemy = plyrTeam ~= lpTeam
-		if isEnemy and not showAll then continue end
 
 		if isSelf then
-			-- Local player: arrow at centre pointing up (radar is player-oriented)
+			-- Local player: circle + FOV cone at centre pointing up
 			if not lpAlive then continue end
-			drawPlayerArrow(cx + 1, cy + 1, 0, selfR, COL_SHADOW)
-			drawPlayerArrow(cx, cy, 0, selfR, COL_SELF)
+			-- Shadow (slightly offset)
+			drawPlayerCircle(cx + 1, cy + 1, selfR, COL_SHADOW)
+			-- Icon (yaw=0 → cone points up, matching player-oriented radar)
+			drawPlayerWithFOV(cx, cy, 0, selfR, COL_SELF)
 			continue
 		end
 
@@ -281,7 +290,7 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 		if not inCircle(sx, sy) then continue end
 
 		if not ply:Alive() then
-			-- Dead teammate: tiny grey square
+			-- Dead: tiny grey square
 			local ds = 3
 			draw.NoTexture()
 			surface.SetDrawColor(COL_DEAD.r, COL_DEAD.g, COL_DEAD.b, COL_DEAD.a)
@@ -290,11 +299,11 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 		end
 
 		local col = not isEnemy and COL_ALLY or COL_ENEMY
-		drawPlayerCircle(sx + 1, sy + 1, triR, COL_SHADOW)
-		drawPlayerCircle(sx, sy, triR, col)
+		drawPlayerCircle(sx + 1, sy + 1, dotR, COL_SHADOW)
+		drawPlayerCircle(sx, sy, dotR, col)
 	end
 
-	-- Bots
+	-- Bots (always visible, both teams)
 	local botClasses = {
 		["css_bot_t_csgo"]  = TEAM_T,
 		["css_bot_ct_csgo"] = TEAM_CT,
@@ -303,15 +312,13 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 		for _, bot in ipairs(ents.FindByClass(cls)) do
 			if not IsValid(bot) then continue end
 			local isEnemy = botTeam ~= lpTeam
-			if isEnemy and not showAll then continue end
-
 			local pos = bot:GetPos()
 			local sx, sy = worldToRadar(pos.x, pos.y)
 			if not inCircle(sx, sy) then continue end
 
 			local col = isEnemy and COL_ENEMY or COL_ALLY
-			drawPlayerCircle(sx + 1, sy + 1, triR, COL_SHADOW)
-			drawPlayerCircle(sx, sy, triR, col)
+			drawPlayerCircle(sx + 1, sy + 1, dotR, COL_SHADOW)
+			drawPlayerCircle(sx, sy, dotR, col)
 		end
 	end
 
