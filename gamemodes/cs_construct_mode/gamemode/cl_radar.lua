@@ -112,12 +112,15 @@ local function drawPlayerCircle(px, py, r, col)
 	surface.DrawPoly(poly)
 end
 
--- Circle + FOV cone (CS:GO-style local player icon).
--- Cone winding: center → right-edge → left-edge = CW in screen (Y-down). ✓
+-- Circle + FOV cone + small direction arrow (CS:GO-style local player icon).
+-- Cone winding:  center → right-edge → left-edge  = CW in screen (Y-down). ✓
+-- Arrow winding: tip → side-A → side-B            = CW in screen (Y-down). ✓
 local FOV_HALF    = math.rad(45)   -- half of 90° view cone
 local CONE_LENGTH = 2.6            -- cone length in multiples of circle radius
 local function drawPlayerWithFOV(px, py, yaw_deg, r, col)
 	local rad  = math.rad(yaw_deg)
+	local s    = math.sin(rad)
+	local c    = math.cos(rad)
 	local la   = rad - FOV_HALF
 	local ra   = rad + FOV_HALF
 	local clen = r * CONE_LENGTH
@@ -126,16 +129,35 @@ local function drawPlayerWithFOV(px, py, yaw_deg, r, col)
 	local rx   = px + math.sin(ra) * clen
 	local ry   = py - math.cos(ra) * clen
 	draw.NoTexture()
-	-- Filled cone (semi-transparent)
+	-- 1. Filled cone (semi-transparent)
 	surface.SetDrawColor(col.r, col.g, col.b, math.floor((col.a or 255) * 0.38))
 	surface.DrawPoly({ { x = px, y = py }, { x = rx, y = ry }, { x = lx, y = ly } })
-	-- Solid circle on top
+	-- 2. Solid circle on top
 	local poly = {}
 	for i = 1, ICO_SEGS do
 		poly[i] = { x = px + _icoPoly[i].x * r, y = py + _icoPoly[i].y * r }
 	end
 	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
 	surface.DrawPoly(poly)
+	-- 3. Small white direction arrow protruding from circle edge
+	--    tip    = circle edge + arrowLen in forward direction
+	--    base   = circle edge
+	--    sideA  = base + perpendicular * halfW  (screen-right at yaw=0)
+	--    sideB  = base - perpendicular * halfW  (screen-left  at yaw=0)
+	--    CW winding in screen: tip → sideA → sideB
+	local arrowLen  = r * 0.85
+	local halfW     = r * 0.32
+	local tipX  = px + s * (r + arrowLen)
+	local tipY  = py - c * (r + arrowLen)
+	local bx    = px + s * r
+	local by_   = py - c * r
+	-- perpendicular to forward = (c, s) in screen coords
+	surface.SetDrawColor(255, 255, 255, 230)
+	surface.DrawPoly({
+		{ x = tipX,          y = tipY          },
+		{ x = bx + c * halfW, y = by_ + s * halfW },
+		{ x = bx - c * halfW, y = by_ - s * halfW },
+	})
 end
 
 -- ============================================================
