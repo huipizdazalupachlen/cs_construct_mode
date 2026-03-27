@@ -291,12 +291,6 @@ local function startFreezePhase()
 	timer.Simple(0.5, function()
 		if CSConstruct.Phase ~= PHASE_FREEZE then return end
 		CSBots.BalanceTeams()
-		-- Замораживаем ботов на время фриз-тайма
-		timer.Simple(0.3, function()
-			for _, bot in ipairs(CSBots.List) do
-				if IsValid(bot) then bot:SetMoveType(MOVETYPE_NONE) end
-			end
-		end)
 	end)
 end
 
@@ -316,11 +310,6 @@ local function startLivePhase()
 		if IsValid(p) and p:Alive() and isPlayingTeam(p:Team()) then
 			p.CSMode_Frozen = false
 		end
-	end
-
-	-- Размораживаем ботов
-	for _, bot in ipairs(CSBots.List) do
-		if IsValid(bot) then bot:SetMoveType(MOVETYPE_STEP) end
 	end
 
 	-- Выдаём бомбу случайному живому игроку T стороны
