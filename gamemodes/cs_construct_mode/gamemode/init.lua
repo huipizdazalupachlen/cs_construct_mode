@@ -233,53 +233,14 @@ local function applyRoundMoneyBonuses(winnerTeam)
 end
 
 local function cleanupRound()
-	-- Трупы игроков (рагдоллы)
-	for _, e in ipairs(ents.FindByClass("prop_ragdoll")) do
-		if IsValid(e) then e:Remove() end
-	end
-
-	-- Тела мёртвых workshop-ботов (живые и мёртвые по классу)
-	for _, cls in ipairs({"css_bot_t_csgo", "css_bot_ct_csgo"}) do
-		for _, e in ipairs(ents.FindByClass(cls)) do
-			if IsValid(e) then e:Remove() end
-		end
-	end
-	-- Страховка: любые мёртвые NPC (на случай если аддон меняет класс или не удаляет тело)
-	for _, e in ipairs(ents.GetAll()) do
-		if IsValid(e) and e:IsNPC() and not e:IsAlive() then
-			e:Remove()
-		end
-	end
 	if CSBots then CSBots.List = {} end
 
-	-- Заложенная бомба
-	for _, e in ipairs(ents.FindByClass("swcs_planted_c4")) do
-		if IsValid(e) then e:Remove() end
-	end
-
-	-- Брошенное оружие (без владельца)
-	for _, e in ipairs(ents.GetAll()) do
-		if IsValid(e) and e:IsWeapon() and not IsValid(e:GetOwner()) then
-			e:Remove()
-		end
-	end
+	-- Полная очистка карты (как кнопка в q-меню)
+	game.CleanUpMap()
 
 	-- Кровь и декали на клиентах
 	net.Start("CSMode_CleanupDecals")
 	net.Broadcast()
-
-	-- Второй проход с задержкой: рагдоллы ботов могут создаваться асинхронно
-	-- уже после того как NPC-сущность удалена
-	timer.Simple(0.3, function()
-		for _, e in ipairs(ents.FindByClass("prop_ragdoll")) do
-			if IsValid(e) then e:Remove() end
-		end
-		for _, e in ipairs(ents.GetAll()) do
-			if IsValid(e) and e:IsNPC() and not e:IsAlive() then
-				e:Remove()
-			end
-		end
-	end)
 end
 
 local function startFreezePhase()
