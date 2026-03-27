@@ -543,22 +543,32 @@ hook.Add("NPCKilled", "CSMode_BotKillReward", function(npc, attacker, inflictor)
 	end
 	if not botTeam then return end
 
-	-- Килл-фид
-	if IsValid(attacker) and attacker:IsPlayer() then
-		local wepClass = ""
+	-- Килл-фид (игрок или бот как атакующий)
+	local atkIsPlayer = IsValid(attacker) and attacker:IsPlayer()
+	local atkIsBot    = IsValid(attacker) and attacker.BotTeam ~= nil
+	if atkIsPlayer or atkIsBot then
+		local atkName, atkTeam, atkIdx, wepClass = "", 0, 0, ""
+		if atkIsPlayer then
+			atkName = attacker:Nick()
+			atkTeam = attacker:Team()
+			atkIdx  = attacker:EntIndex()
+		else
+			atkName = attacker:GetClass() == "css_bot_ct_csgo" and "BOT CT" or "BOT T"
+			atkTeam = attacker.BotTeam
+			atkIdx  = attacker:EntIndex()
+		end
 		local wep = attacker:GetActiveWeapon()
 		if IsValid(wep) then wepClass = wep:GetClass() end
-		local isSuicide = (attacker == npc)
 		net.Start("CSMode_KillFeedEntry")
-		net.WriteString(attacker:Nick())
-		net.WriteUInt(attacker:Team(), 8)
-		net.WriteUInt(attacker:EntIndex(), 16)
+		net.WriteString(atkName)
+		net.WriteUInt(atkTeam, 8)
+		net.WriteUInt(atkIdx, 16)
 		net.WriteString(npc:GetClass() == "css_bot_ct_csgo" and "BOT CT" or "BOT T")
 		net.WriteUInt(botTeam, 8)
 		net.WriteUInt(0, 16)
 		net.WriteString(wepClass)
 		net.WriteBool(false)
-		net.WriteBool(isSuicide)
+		net.WriteBool(false)
 		net.Broadcast()
 	end
 
@@ -669,12 +679,19 @@ function GM:PlayerDeath(victim, inflictor, attacker)
 	-- Broadcast kill feed entry to all clients
 	if CSConstruct.Phase == PHASE_LIVE or CSConstruct.Phase == PHASE_ROUND_END then
 		local hs = (victim.CS_LastHitGroup == HITGROUP_HEAD)
-		local isSuicide = (attacker == victim) or not IsValid(attacker) or not attacker:IsPlayer()
+		local isBot = IsValid(attacker) and attacker.BotTeam ~= nil
+		local isSuicide = (attacker == victim) or not IsValid(attacker) or (not attacker:IsPlayer() and not isBot)
 		local atkName, atkTeam, atkIdx, wepClass = "", 0, 0, ""
 		if not isSuicide then
-			atkName = attacker:Nick()
-			atkTeam = attacker:Team()
-			atkIdx  = attacker:EntIndex()
+			if attacker:IsPlayer() then
+				atkName = attacker:Nick()
+				atkTeam = attacker:Team()
+				atkIdx  = attacker:EntIndex()
+			else -- bot attacker
+				atkName = attacker:GetClass() == "css_bot_ct_csgo" and "BOT CT" or "BOT T"
+				atkTeam = attacker.BotTeam
+				atkIdx  = attacker:EntIndex()
+			end
 			local wep = attacker:GetActiveWeapon()
 			if IsValid(wep) then wepClass = wep:GetClass() end
 		end
