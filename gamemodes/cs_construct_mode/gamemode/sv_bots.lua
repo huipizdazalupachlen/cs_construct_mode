@@ -17,25 +17,6 @@ local BOT_CLASS = {
 }
 
 
--- ============================================================
--- ЗАПРЕТ АТАКИ СОЮЗНИКОВ (NPC → Player)
--- CanNPCAttack: если возвращает false — NPC вообще не атакует цель
--- (не целится, не стреляет, не преследует как врага).
--- ============================================================
-
-hook.Add("CanNPCAttack", "CSBots_FriendlyFire", function(npc, ent)
-	if not IsValid(npc) or not IsValid(ent) then return end
-	local botTeam = npc.BotTeam
-	if not botTeam then return end
-	-- Запрещаем атаку союзника-игрока
-	if ent:IsPlayer() and ent:Team() == botTeam then
-		return false
-	end
-	-- Запрещаем атаку союзника-бота
-	if ent.BotTeam and ent.BotTeam == botTeam then
-		return false
-	end
-end)
 
 -- ============================================================
 -- СПАВН БОТА
