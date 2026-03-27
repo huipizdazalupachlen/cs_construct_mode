@@ -906,8 +906,21 @@ hook.Add("HUDPaint", "CSConstruct_Scoreboard", function()
 		if p:Team() == TEAM_T then table.insert(tPly, p)
 		elseif p:Team() == TEAM_CT then table.insert(ctPly, p) end
 	end
-	table.sort(tPly, function(a, b) return a:Frags() > b:Frags() end)
-	table.sort(ctPly, function(a, b) return a:Frags() > b:Frags() end)
+	-- Add bots as lightweight wrapper tables
+	for _, bot in ipairs(ents.FindByClass("css_bot_t_csgo")) do
+		if IsValid(bot) then table.insert(tPly,  { _isBot = true, ent = bot, team = TEAM_T  }) end
+	end
+	for _, bot in ipairs(ents.FindByClass("css_bot_ct_csgo")) do
+		if IsValid(bot) then table.insert(ctPly, { _isBot = true, ent = bot, team = TEAM_CT }) end
+	end
+	-- Players first, then bots; players sorted by kills
+	local function sbSort(a, b)
+		if a._isBot ~= b._isBot then return not a._isBot end
+		if a._isBot then return false end
+		return a:Frags() > b:Frags()
+	end
+	table.sort(tPly,  sbSort)
+	table.sort(ctPly, sbSort)
 
 	-- Background overlay
 	surface.SetDrawColor(0, 0, 0, 160)
@@ -968,10 +981,17 @@ hook.Add("HUDPaint", "CSConstruct_Scoreboard", function()
 			draw.SimpleText("No players", "CS2_SB_Stat", bX + bW / 2, curY + rowH / 2, CS2.muted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 			curY = curY + rowH + 1
 		end
-		for i, ply in ipairs(players) do
-			if not IsValid(ply) then continue end
-			local isMe = (ply == LocalPlayer())
-			local alive = ply:Alive()
+		for i, entry in ipairs(players) do
+			local isBot  = entry._isBot
+			local ent    = isBot and entry.ent or entry
+			if not IsValid(ent) then continue end
+
+			local isMe   = not isBot and (ent == LocalPlayer())
+			local alive  = isBot and (ent:Health() > 0) or ent:Alive()
+			local nick   = isBot and "BOT" or ent:Nick()
+			local kills  = isBot and 0 or ent:Frags()
+			local deaths = isBot and 0 or ent:Deaths()
+			local plyTeam = isBot and entry.team or ent:Team()
 
 			-- Row background
 			local bg = (i % 2 == 0) and CS2.panel or CS2.panelLt
@@ -988,7 +1008,6 @@ hook.Add("HUDPaint", "CSConstruct_Scoreboard", function()
 			local statusCol = alive and CS2.green or CS2.red
 			draw.RoundedBox(4, bX + 10, curY + (rowH - 8) / 2, 8, 8, statusCol)
 			if not alive then
-				-- X mark on dead
 				surface.SetDrawColor(255, 255, 255, 200)
 				local dx, dy = bX + 12, curY + rowH / 2 - 2
 				surface.DrawLine(dx, dy, dx + 4, dy + 4)
@@ -997,31 +1016,34 @@ hook.Add("HUDPaint", "CSConstruct_Scoreboard", function()
 
 			-- Avatar letter
 			draw.RoundedBox(3, bX + 24, curY + 4, rowH - 8, rowH - 8, Color(teamColor.r, teamColor.g, teamColor.b, 35))
-			local initial = ply:Nick():sub(1, 1):upper()
-			draw.SimpleText(initial, "CS2_SB_Stat", bX + 24 + (rowH - 8) / 2, curY + rowH / 2, teamColor, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			draw.SimpleText(nick:sub(1, 1):upper(), "CS2_SB_Stat", bX + 24 + (rowH - 8) / 2, curY + rowH / 2, teamColor, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
 			-- Name
 			local nameCol = alive and CS2.text or Color(CS2.muted.r, CS2.muted.g, CS2.muted.b, 160)
-			draw.SimpleText(ply:Nick(), "CS2_SB_Name", bX + 24 + rowH - 4, curY + rowH / 2, nameCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+			draw.SimpleText(nick, "CS2_SB_Name", bX + 24 + rowH - 4, curY + rowH / 2, nameCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 			-- Stats
-			draw.SimpleText(tostring(ply:Frags()), "CS2_SB_Stat", colK, curY + rowH / 2, CS2.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-			draw.SimpleText(tostring(ply:Deaths()), "CS2_SB_Stat", colD, curY + rowH / 2, CS2.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			draw.SimpleText(tostring(kills),  "CS2_SB_Stat", colK, curY + rowH / 2, CS2.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			draw.SimpleText(tostring(deaths), "CS2_SB_Stat", colD, curY + rowH / 2, CS2.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 			draw.SimpleText("0", "CS2_SB_Stat", colA, curY + rowH / 2, CS2.muted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
-			-- Money (own team only)
+			-- Money (own team only, bots show "-")
 			local lp2 = LocalPlayer()
-			if IsValid(lp2) and ply:Team() == lp2:Team() then
-				local m = ply == lp2 and CSCL.Money or 0
+			if not isBot and IsValid(lp2) and plyTeam == lp2:Team() then
+				local m = ent == lp2 and CSCL.Money or 0
 				draw.SimpleText("$" .. m, "CS2_SB_Stat", colM, curY + rowH / 2, hc, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 			else
 				draw.SimpleText("-", "CS2_SB_Stat", colM, curY + rowH / 2, CS2.muted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 			end
 
-			-- Ping
-			local ping = ply:Ping()
-			local pCol = ping > 100 and CS2.red or (ping > 60 and Color(220, 190, 50) or CS2.green)
-			draw.SimpleText(tostring(ping), "CS2_SB_Stat", colP, curY + rowH / 2, pCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			-- Ping (bots show "BOT")
+			if isBot then
+				draw.SimpleText("BOT", "CS2_SB_Stat", colP, curY + rowH / 2, CS2.muted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			else
+				local ping = ent:Ping()
+				local pCol = ping > 100 and CS2.red or (ping > 60 and Color(220, 190, 50) or CS2.green)
+				draw.SimpleText(tostring(ping), "CS2_SB_Stat", colP, curY + rowH / 2, pCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			end
 
 			curY = curY + rowH + 1
 		end
