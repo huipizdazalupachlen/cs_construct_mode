@@ -681,8 +681,10 @@ function GM:PlayerDeath(victim, inflictor, attacker)
 				atkTeam = attacker.BotTeam
 				atkIdx  = attacker:EntIndex()
 			end
-			local wep = attacker:GetActiveWeapon()
-			if IsValid(wep) then wepClass = wep:GetClass() end
+			if attacker:IsPlayer() then
+				local wep = attacker:GetActiveWeapon()
+				if IsValid(wep) then wepClass = wep:GetClass() end
+			end
 		end
 		net.Start("CSMode_KillFeedEntry")
 		net.WriteString(atkName)
