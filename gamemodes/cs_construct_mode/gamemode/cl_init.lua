@@ -21,8 +21,6 @@ CSCL.TeamFrame = nil
 CSCL.BuyFrame = nil
 CSCL.KillFeed = {}
 
-include("cl_radar.lua")
-
 -- ============================================================
 -- CS2 HUD STYLE PALETTE
 -- ============================================================
@@ -71,6 +69,8 @@ surface.CreateFont("CS2H_Tiny",    { font = "Goodland SemiBold", size = ScreenSc
 surface.CreateFont("CS2H_WinBig",  { font = "Goodland SemiBold", size = ScreenScale(20), antialias = true })
 surface.CreateFont("CS2H_WinSub",  { font = "Goodland SemiBold", size = ScreenScale(9),  antialias = true })
 surface.CreateFont("CS2H_KF",      { font = "Goodland SemiBold", size = ScreenScale(6),  antialias = true })
+
+include("cl_radar.lua")
 
 -- Buy menu / Scoreboard / UI fonts (Goodland SemiBold)
 local function mkFont(name, size)

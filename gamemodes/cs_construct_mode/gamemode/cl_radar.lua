@@ -1,29 +1,22 @@
 -- ============================================================
--- CS2-STYLE CIRCULAR RADAR  (top-right corner)
+-- CS2-STYLE SQUARE RADAR
+-- Квадратный радар с севером вверху, иконки — треугольники
 -- ============================================================
 
--- Radar geometry (screen-relative, computed on first draw)
-local RDR_PAD  = 12          -- отступ от края экрана
-local RDR_FRAC = 0.105       -- радиус = ScrH() * RDR_FRAC
+local RDR_PAD       = 12     -- отступ от края экрана
+local RDR_SIZE_FRAC = 0.195  -- сторона квадрата = ScrH() * RDR_SIZE_FRAC
+local RDR_INNER_PAD = 2      -- отступ между рамкой и картой
 
--- После первого кадра сюда записываем нижний край радара,
--- чтобы killfeed мог начинаться ниже него.
 CS_RADAR_BOTTOM = 0
 
 -- ============================================================
--- OVERVIEW: координаты карты
+-- OVERVIEW
 -- ============================================================
--- pos_x, pos_y — левый верхний угол текстуры в мировых единицах
--- scale        — мировых единиц на пиксель текстуры
--- Стандарт de_dust2 (используется как запасной вариант)
 local OV_DEFAULT = { pos_x = -2476, pos_y = 3239, scale = 4.4 }
-
-local overviewCache = {}   -- [mapName] = { pos_x, pos_y, scale }
+local overviewCache = {}
 
 local function parseOverviewTxt(mapName)
 	if overviewCache[mapName] then return overviewCache[mapName] end
-
-	-- Пробуем прочитать из resource/overviews/<map>.txt
 	local txt = file.Read("resource/overviews/" .. mapName .. ".txt", "GAME")
 	if txt then
 		local px = tonumber(txt:match('"pos_x"%s+"([%-%.%d]+)"'))
@@ -34,40 +27,22 @@ local function parseOverviewTxt(mapName)
 			return overviewCache[mapName]
 		end
 	end
-
-	-- Фоллбэк: если карта называется de_dust2new — используем dust2
 	if mapName:find("dust2") then
 		overviewCache[mapName] = OV_DEFAULT
 	else
-		-- Для неизвестной карты — нулевые данные (без текстуры)
 		overviewCache[mapName] = { pos_x = 0, pos_y = 0, scale = 1, nomap = true }
 	end
 	return overviewCache[mapName]
 end
 
--- ============================================================
--- ОБЗОРНАЯ ТЕКСТУРА
--- ============================================================
 local matCache = {}
-local MAT_ERROR = nil  -- лениво инициализируется
-
 local function getOverviewMat(mapName)
 	if matCache[mapName] ~= nil then return matCache[mapName] end
-
-	-- Пробуем стандартный путь CS:GO overview
-	local paths = {
-		"overviews/" .. mapName .. "_radar",
-		"overviews/de_dust2_radar",   -- фоллбэк на dust2 если карта его вариант
-	}
-	for _, p in ipairs(paths) do
-		local m = Material(p)
-		if not m:IsError() then
-			matCache[mapName] = m
-			return m
-		end
-		-- Пробуем и без .vmt расширения
-	end
-	matCache[mapName] = false  -- нет текстуры
+	local m = Material("overviews/" .. mapName .. "_radar")
+	if not m:IsError() then matCache[mapName] = m return m end
+	m = Material("overviews/de_dust2_radar")
+	if not m:IsError() then matCache[mapName] = m return m end
+	matCache[mapName] = false
 	return false
 end
 
@@ -75,221 +50,206 @@ end
 -- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 -- ============================================================
 
--- Мировые координаты -> позиция на радаре (относительно центра), нормировано [-1, 1]
+-- Мировые координаты → нормализованные [-1, 1] для радара
 local function worldToNorm(wx, wy, ov)
-	-- u, v — координаты на текстуре 1024×1024 в диапазоне [0, 1]
 	local u = (wx - ov.pos_x) / (1024 * ov.scale)
 	local v = (ov.pos_y - wy) / (1024 * ov.scale)
-	-- центрируем: [-0.5, 0.5] -> [-1, 1]
 	return (u - 0.5) * 2, (v - 0.5) * 2
 end
 
--- Закрашенный круг через DrawPoly
-local _cpoly = {}
-local function filledCircle(cx, cy, r, col)
-	local steps = 20
-	for i = 1, steps do
-		local a = (i / steps) * math.pi * 2
-		_cpoly[i] = { x = cx + math.cos(a) * r, y = cy + math.sin(a) * r }
-	end
-	draw.NoTexture()
-	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
-	surface.DrawPoly(_cpoly)
+-- Проверка: точка в видимой зоне карты
+local function inBounds(nx, ny)
+	return nx >= -1 and nx <= 1 and ny >= -1 and ny <= 1
 end
 
--- Кружок (контур)
-local function circleOutline(cx, cy, r, thick, col)
-	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
-	for i = 0, 360, 2 do
-		local a1 = math.rad(i)
-		local a2 = math.rad(i + 2)
-		-- рисуем тонкие прямоугольники по окружности
-		local x1, y1 = cx + math.cos(a1) * r, cy + math.sin(a1) * r
-		local x2, y2 = cx + math.cos(a2) * r, cy + math.sin(a2) * r
-		surface.DrawLine(math.floor(x1), math.floor(y1), math.floor(x2), math.floor(y2))
-	end
-end
+-- Треугольная иконка игрока (кончик = направление взгляда)
+local function drawPlayerTriangle(px, py, yaw, r, col)
+	local rad  = math.rad(yaw)
+	local sinY = math.sin(rad)
+	local cosY = math.cos(rad)
+	-- Кончик — вперёд
+	local tipX = px + sinY * r * 1.4
+	local tipY = py - cosY * r * 1.4
+	-- Основание — назад
+	local baseX = px - sinY * r
+	local baseY = py + cosY * r
+	-- Левый и правый углы основания
+	local leftX  = baseX + cosY * r * 0.85
+	local leftY  = baseY + sinY * r * 0.85
+	local rightX = baseX - cosY * r * 0.85
+	local rightY = baseY - sinY * r * 0.85
 
--- Стрелка направления от точки
-local function drawArrow(cx, cy, yaw, len, col)
-	local rad = math.rad(yaw)
-	local ex = cx + math.sin(rad) * len
-	local ey = cy - math.cos(rad) * len
-	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
-	surface.DrawLine(math.floor(cx), math.floor(cy), math.floor(ex), math.floor(ey))
-	-- Наконечник-треугольник
-	local w1 = math.rad(yaw + 145)
-	local w2 = math.rad(yaw - 145)
 	draw.NoTexture()
 	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
 	surface.DrawPoly({
-		{ x = ex,                              y = ey                              },
-		{ x = ex + math.sin(w1) * len * 0.42, y = ey - math.cos(w1) * len * 0.42 },
-		{ x = ex + math.sin(w2) * len * 0.42, y = ey - math.cos(w2) * len * 0.42 },
+		{ x = tipX,   y = tipY   },
+		{ x = leftX,  y = leftY  },
+		{ x = rightX, y = rightY },
 	})
 end
 
 -- ============================================================
--- СТЕНСИЛ-МАСКА (круговое клиппирование)
+-- ЦВЕТА
 -- ============================================================
-local function beginCircleClip(cx, cy, r)
-	render.ClearStencil()
-	render.SetStencilEnable(true)
-	render.SetStencilWriteMask(1)
-	render.SetStencilTestMask(1)
-	render.SetStencilFailOperation(STENCILOPERATION_REPLACE)
-	render.SetStencilPassOperation(STENCILOPERATION_ZERO)
-	render.SetStencilZFailOperation(STENCILOPERATION_ZERO)
-	render.SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_NEVER)
-	render.SetStencilReferenceValue(1)
-
-	local poly = {}
-	for i = 1, 36 do
-		local a = (i / 36) * math.pi * 2
-		poly[i] = { x = cx + math.cos(a) * r, y = cy + math.sin(a) * r }
-	end
-	draw.NoTexture()
-	surface.SetDrawColor(255, 255, 255, 255)
-	surface.DrawPoly(poly)
-
-	render.SetStencilFailOperation(STENCILOPERATION_ZERO)
-	render.SetStencilPassOperation(STENCILOPERATION_REPLACE)
-	render.SetStencilZFailOperation(STENCILOPERATION_ZERO)
-	render.SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_EQUAL)
-	render.SetStencilReferenceValue(1)
-end
-
-local function endCircleClip()
-	render.SetStencilEnable(false)
-	render.ClearStencil()
-end
+local COL_SELF   = Color(255, 255, 255, 255)
+local COL_ALLY   = Color(100, 225, 115, 255)
+local COL_ENEMY  = Color(215,  55,  55, 220)
+local COL_DEAD   = Color(120, 120, 130, 130)
+local COL_SHADOW = Color(  0,   0,   0, 160)
+local COL_BOMB   = Color(255, 200,   0)
 
 -- ============================================================
--- ОСНОВНОЙ HUD HOOK
+-- HUD HOOK
 -- ============================================================
-
 hook.Add("HUDPaint", "CSMode_Radar", function()
 	local lp = LocalPlayer()
 	if not IsValid(lp) then return end
 	if CSCL.Phase == PHASE_LOBBY then return end
 
-	local sw, sh = ScrW(), ScrH()
-	local R    = math.floor(sh * RDR_FRAC)
-	local cx   = RDR_PAD + R
-	local cy   = RDR_PAD + R
+	local sh = ScrH()
+	local S  = math.floor(sh * RDR_SIZE_FRAC)
+	local ox = RDR_PAD
+	local oy = RDR_PAD
+	local HS = (S - RDR_INNER_PAD * 2) / 2
+	local cx = ox + S / 2
+	local cy = oy + S / 2
 
-	-- Публикуем нижний край радара (killfeed начнётся ниже)
-	CS_RADAR_BOTTOM = cy + R + RDR_PAD
+	CS_RADAR_BOTTOM = oy + S + RDR_PAD
 
 	local mapName = game.GetMap()
 	local ov      = parseOverviewTxt(mapName)
 	local mat     = not ov.nomap and getOverviewMat(mapName) or false
+	local useOv   = ov.nomap and OV_DEFAULT or ov
 
-	-- ---- Фон (тёмный круг, виден если нет текстуры) ----
-	filledCircle(cx, cy, R, Color(12, 14, 18, 215))
+	-- ---- Фон ----
+	draw.NoTexture()
+	surface.SetDrawColor(12, 14, 18, 215)
+	surface.DrawRect(ox, oy, S, S)
 
-	-- ---- Начинаем круговой клиппинг ----
-	beginCircleClip(cx, cy, R)
-
-	-- ---- Карта (overview текстура) ----
+	-- ---- Карта ----
+	local mp = RDR_INNER_PAD
 	if mat then
 		surface.SetMaterial(mat)
 		surface.SetDrawColor(255, 255, 255, 200)
-		surface.DrawTexturedRect(cx - R, cy - R, R * 2, R * 2)
-
-		-- Слой затемнения поверх текстуры для читаемости точек
+		surface.DrawTexturedRect(ox + mp, oy + mp, S - mp * 2, S - mp * 2)
+		-- Тёмный оверлей для читаемости иконок
 		draw.NoTexture()
-		surface.SetDrawColor(0, 0, 0, 80)
-		surface.DrawRect(cx - R, cy - R, R * 2, R * 2)
+		surface.SetDrawColor(0, 0, 0, 75)
+		surface.DrawRect(ox + mp, oy + mp, S - mp * 2, S - mp * 2)
 	else
-		-- Нет текстуры — тонкая сетка
+		-- Сетка если карта неизвестна
 		surface.SetDrawColor(30, 35, 44, 100)
-		local step = R / 2
-		for dx = -R, R, step do
-			surface.DrawLine(math.floor(cx + dx), cy - R, math.floor(cx + dx), cy + R)
+		local step = math.floor(S / 4)
+		for dx = step, S - step, step do
+			surface.DrawLine(ox + dx, oy, ox + dx, oy + S)
 		end
-		for dy = -R, R, step do
-			surface.DrawLine(cx - R, math.floor(cy + dy), cx + R, math.floor(cy + dy))
+		for dy = step, S - step, step do
+			surface.DrawLine(ox, oy + dy, ox + S, oy + dy)
 		end
 	end
 
-	-- ---- Игроки ----
 	local lpTeam  = lp:Team()
 	local lpAlive = lp:Alive()
 	local showAll = (CSCL.GameMode == GAMEMODE_TRAINING) or not lpAlive
 
-	local dotR   = math.max(3, math.floor(R * 0.045))
-	local arrowL = math.max(6, math.floor(R * 0.12))
+	local triR     = math.max(4, math.floor(HS * 0.048))
+	local selfTriR = triR + 2
 
+	-- ---- Игроки ----
 	for _, ply in ipairs(player.GetAll()) do
 		if not IsValid(ply) then continue end
-		local isPlaying = ply:Team() == TEAM_T or ply:Team() == TEAM_CT
-		if not isPlaying then continue end
+		local plyrTeam = ply:Team()
+		if plyrTeam ~= TEAM_T and plyrTeam ~= TEAM_CT then continue end
 
-		local isSelf     = ply == lp
-		local isEnemy    = ply:Team() ~= lpTeam
+		local isSelf  = ply == lp
+		local isEnemy = plyrTeam ~= lpTeam
+
 		if isEnemy and not showAll then continue end
-		if not ply:Alive() and not isSelf then continue end
 
 		local pos = ply:GetPos()
-		local nx, ny
+		local nx, ny = worldToNorm(pos.x, pos.y, useOv)
+		if not inBounds(nx, ny) then continue end
 
-		if ov.nomap then
-			-- Нет данных о карте — динамическая нормировка не реализована,
-			-- просто пропускаем отображение без текстуры
-			nx, ny = worldToNorm(pos.x, pos.y, OV_DEFAULT)
-		else
-			nx, ny = worldToNorm(pos.x, pos.y, ov)
+		local sx = math.floor(cx + nx * HS)
+		local sy = math.floor(cy + ny * HS)
+
+		if not ply:Alive() then
+			if isSelf then continue end
+			-- Мёртвый союзник — маленький серый квадрат
+			local ds = 3
+			surface.SetDrawColor(COL_DEAD.r, COL_DEAD.g, COL_DEAD.b, COL_DEAD.a)
+			surface.DrawRect(sx - ds, sy - ds, ds * 2, ds * 2)
+			continue
 		end
 
-		local sx = cx + nx * R
-		local sy = cy + ny * R
-
+		local yaw = ply:EyeAngles().y
+		local r   = isSelf and selfTriR or triR
 		local col
 		if isSelf then
-			col = Color(100, 225, 115, 255)
+			col = COL_SELF
 		elseif not isEnemy then
-			col = Color(65, 175, 80, 220)
+			col = COL_ALLY
 		else
-			col = Color(215, 55, 55, 220)
+			col = COL_ENEMY
 		end
 
-		local r = isSelf and (dotR + 1) or dotR
-
 		-- Тень
-		filledCircle(sx, sy, r + 1.5, Color(0, 0, 0, 140))
-		-- Точка
-		filledCircle(sx, sy, r, col)
-		-- Стрелка взгляда
-		local yaw = ply:EyeAngles().y
-		drawArrow(sx, sy, yaw, arrowL, Color(col.r, col.g, col.b, 200))
+		drawPlayerTriangle(sx + 1, sy + 1, yaw, r, COL_SHADOW)
+		-- Иконка
+		drawPlayerTriangle(sx, sy, yaw, r, col)
 	end
 
-	-- ---- Установленная бомба ----
+	-- ---- Боты (workshop NPCs) ----
+	local botClasses = {
+		["css_bot_t_csgo"]  = TEAM_T,
+		["css_bot_ct_csgo"] = TEAM_CT,
+	}
+	for cls, botTeam in pairs(botClasses) do
+		for _, bot in ipairs(ents.FindByClass(cls)) do
+			if not IsValid(bot) then continue end
+			local isEnemy = botTeam ~= lpTeam
+			if isEnemy and not showAll then continue end
+
+			local pos = bot:GetPos()
+			local nx, ny = worldToNorm(pos.x, pos.y, useOv)
+			if not inBounds(nx, ny) then continue end
+
+			local sx  = math.floor(cx + nx * HS)
+			local sy  = math.floor(cy + ny * HS)
+			local yaw = bot:GetAngles().y
+			local col = isEnemy and COL_ENEMY or COL_ALLY
+
+			drawPlayerTriangle(sx + 1, sy + 1, yaw, triR, COL_SHADOW)
+			drawPlayerTriangle(sx, sy, yaw, triR, col)
+		end
+	end
+
+	-- ---- Бомба ----
 	for _, ent in ipairs(ents.FindByClass("swcs_planted_c4")) do
 		if not IsValid(ent) then continue end
 		local pos = ent:GetPos()
-		local nx, ny = worldToNorm(pos.x, pos.y, ov.nomap and OV_DEFAULT or ov)
-		local sx = cx + nx * R
-		local sy = cy + ny * R
+		local nx, ny = worldToNorm(pos.x, pos.y, useOv)
+		if not inBounds(nx, ny) then continue end
+
+		local sx    = math.floor(cx + nx * HS)
+		local sy    = math.floor(cy + ny * HS)
 		local pulse = math.floor(math.abs(math.sin(CurTime() * 3.5)) * 110 + 145)
-		local bs = math.max(4, math.floor(R * 0.04))
-		surface.SetDrawColor(255, 200, 0, pulse)
-		surface.DrawRect(math.floor(sx - bs), math.floor(sy - 1), bs * 2, 2)
-		surface.DrawRect(math.floor(sx - 1), math.floor(sy - bs), 2, bs * 2)
+		local bs    = math.max(4, math.floor(HS * 0.04))
+
+		surface.SetDrawColor(COL_BOMB.r, COL_BOMB.g, COL_BOMB.b, pulse)
+		surface.DrawRect(sx - bs, sy - 1, bs * 2, 2)
+		surface.DrawRect(sx - 1, sy - bs, 2, bs * 2)
 	end
 
-	-- ---- Конец клиппинга ----
-	endCircleClip()
+	-- ---- Рамка (поверх всего) ----
+	draw.NoTexture()
+	surface.SetDrawColor(20, 22, 28, 255)
+	surface.DrawOutlinedRect(ox - 1, oy - 1, S + 2, S + 2, 1)
+	surface.SetDrawColor(55, 62, 75, 255)
+	surface.DrawOutlinedRect(ox, oy, S, S, 1)
 
-	-- ---- Рамка (поверх клиппинга, чтобы не обрезалась) ----
-	-- Внешняя тёмная окантовка
-	circleOutline(cx, cy, R + 1, 1, Color(20, 22, 28, 255))
-	-- Основная рамка
-	circleOutline(cx, cy, R, 1, Color(65, 72, 85, 255))
-
-	-- ---- Метка карты ----
+	-- ---- Подпись карты ----
 	draw.SimpleText(mapName, "CS2H_Tiny",
-		cx, cy + R + 3,
+		ox + S / 2, oy + S + 3,
 		Color(65, 75, 90, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 end)
