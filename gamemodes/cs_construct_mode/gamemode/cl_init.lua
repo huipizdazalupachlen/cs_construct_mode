@@ -1497,6 +1497,7 @@ local hudHide = {
 	CHudSquadStatus = true, CHudQuickInfo = true,
 	CHudWeapon = true, CHudHistoryResource = true, CHudHL2Info = true,
 	CHudCrosshair = true, -- прицел рисуем сами через CSConstruct_Crosshair
+	CHudDeathNotice = true, -- киллфид заменён нашим
 }
 function GM:HUDShouldDraw(name)
 	if hudHide[name] then return false end
