@@ -74,7 +74,7 @@ local function beginCircleClip(cx, cy, r)
 	render.SetStencilWriteMask(0xFF)
 	render.SetStencilTestMask(0xFF)
 	render.SetStencilReferenceValue(1)
-	-- Write 1 to stencil inside the circle (using always-fail trick)
+	-- Draw filled circle into stencil (always-fail trick: no color written)
 	render.SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_NEVER)
 	render.SetStencilFailOperation(STENCILOPERATION_REPLACE)
 	render.SetStencilPassOperation(STENCILOPERATION_KEEP)
@@ -82,7 +82,7 @@ local function beginCircleClip(cx, cy, r)
 	draw.NoTexture()
 	surface.SetDrawColor(255, 255, 255, 255)
 	surface.DrawPoly(buildCirclePoly(cx, cy, r))
-	-- From now on: only draw where stencil == 1
+	-- From here: only render where stencil == 1
 	render.SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_EQUAL)
 	render.SetStencilFailOperation(STENCILOPERATION_KEEP)
 end
@@ -92,37 +92,54 @@ local function endCircleClip()
 end
 
 -- ============================================================
--- PLAYER ICON (filled triangle pointing in direction)
+-- DRAW HELPERS
 -- ============================================================
+
+-- Small filled circle (for teammate / bot icons)
+local _icoPoly = {}
+local ICO_SEGS = 16
+for i = 0, ICO_SEGS - 1 do
+	local a = math.pi * 2 * i / ICO_SEGS
+	_icoPoly[i + 1] = { x = math.cos(a), y = math.sin(a) }
+end
+local function drawPlayerCircle(px, py, r, col)
+	local poly = {}
+	for i = 1, ICO_SEGS do
+		poly[i] = { x = px + _icoPoly[i].x * r, y = py + _icoPoly[i].y * r }
+	end
+	draw.NoTexture()
+	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
+	surface.DrawPoly(poly)
+end
+
+-- Arrow/chevron for local player (pointing in direction yaw_deg)
 local function drawPlayerArrow(px, py, yaw_deg, r, col)
 	local rad  = math.rad(yaw_deg)
 	local s    = math.sin(rad)
 	local c    = math.cos(rad)
-	-- Tip: forward
 	local tipX = px + s * r * 1.4
 	local tipY = py - c * r * 1.4
-	-- Base center: backward
 	local bx   = px - s * r
 	local by   = py + c * r
 	draw.NoTexture()
 	surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
 	surface.DrawPoly({
-		{ x = tipX,            y = tipY            },
-		{ x = bx + c * r * 0.85, y = by + s * r * 0.85 },
-		{ x = bx - c * r * 0.85, y = by - s * r * 0.85 },
+		{ x = tipX,               y = tipY               },
+		{ x = bx + c * r * 0.85, y = by + s * r * 0.85  },
+		{ x = bx - c * r * 0.85, y = by - s * r * 0.85  },
 	})
 end
 
 -- ============================================================
 -- COLORS
 -- ============================================================
-local COL_SELF   = Color(100, 220, 100, 255)   -- bright green (local player)
-local COL_ALLY   = Color( 75, 170,  75, 220)   -- darker green (teammates)
-local COL_ENEMY  = Color(220,  75,  75, 220)   -- red (enemies)
+local COL_SELF   = Color(100, 220, 100, 255)   -- bright green (local player arrow)
+local COL_ALLY   = Color( 75, 170,  75, 220)   -- darker green (teammate circles)
+local COL_ENEMY  = Color(220,  75,  75, 220)   -- red (enemy circles)
 local COL_DEAD   = Color(100, 100, 110, 130)   -- grey (dead teammates)
-local COL_SHADOW = Color(  0,   0,   0, 140)
+local COL_SHADOW = Color(  0,   0,   0, 150)
 local COL_BOMB   = Color(255, 200,   0)
-local COL_RING   = Color( 80, 195, 230, 210)   -- CS:GO cyan ring
+local COL_RING   = Color( 80, 195, 230, 220)   -- CS:GO cyan ring
 local COL_BG     = Color( 10,  12,  16, 220)
 
 -- ============================================================
@@ -154,7 +171,6 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 	local lpAlive = lp:Alive()
 	local showAll = (CSCL.GameMode == GAMEMODE_TRAINING) or not lpAlive
 
-	-- Pixels per world unit
 	local radarScale = R / RADAR_ZOOM
 	local innerR     = R - RING_WIDTH
 
@@ -164,12 +180,20 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 	local lsinY     = math.sin(lpYaw_rad)
 
 	-- World XY → radar screen position (player-centred, player-oriented).
-	-- Source Engine: forward = (cosY, sinY), right = (-sinY, cosY)
-	-- screen +X = player right, screen -Y = player forward
+	--
+	-- Formula derivation:
+	--   Player faces yaw θ (CW from East in Source's left-handed system).
+	--   screen +X (right) = player's "right" in geographic sense = (sinθ, -cosθ) world.
+	--   screen -Y (up)    = player's forward                     = (cosθ,  sinθ) world.
+	--   rx = dot(offset, right_geo) = dx*sinθ - dy*cosθ
+	--   ry = -dot(offset, forward)  = -(dx*cosθ + dy*sinθ)
+	--
+	-- This det=-1 transform preserves CW winding of the texture quad
+	-- (world Y-up CW → screen Y-down CW), so surface.DrawPoly renders it.
 	local function worldToRadar(wx, wy)
 		local dx = wx - lpPos.x
 		local dy = wy - lpPos.y
-		local rx = (dy * lcosY - dx * lsinY) * radarScale
+		local rx = (dx * lsinY - dy * lcosY) * radarScale
 		local ry = -(dx * lcosY + dy * lsinY) * radarScale
 		return cx + rx, cy + ry
 	end
@@ -187,17 +211,17 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 	surface.SetDrawColor(COL_BG.r, COL_BG.g, COL_BG.b, COL_BG.a)
 	surface.DrawPoly(buildCirclePoly(cx, cy, innerR))
 
-	-- ---- Stencil clip at inner radius ----
+	-- ---- Stencil clip to inner circle ----
 	beginCircleClip(cx, cy, innerR)
 
 	-- ---- Map texture (rotating, player-centred) ----
 	if mat then
-		-- The overview texture's 4 world-space corners.
-		-- UV (0,0) = world top-left  = (pos_x, pos_y)
-		-- UV (1,0) = world top-right = (pos_x + w, pos_y)
-		-- UV (1,1) = world bot-right = (pos_x + w, pos_y - w)
-		-- UV (0,1) = world bot-left  = (pos_x,     pos_y - w)
-		-- worldToRadar handles rotation+translation, so we just project each corner.
+		-- Project the 4 world corners of the overview texture onto the radar.
+		-- UV(0,0)=world(pos_x,     pos_y)     (NW corner)
+		-- UV(1,0)=world(pos_x+w,   pos_y)     (NE corner)
+		-- UV(1,1)=world(pos_x+w,   pos_y-w)   (SE corner)
+		-- UV(0,1)=world(pos_x,     pos_y-w)   (SW corner)
+		-- worldToRadar handles rotation+translation so the quad auto-rotates.
 		local w = 1024 * useOv.scale
 		local x0, y0 = worldToRadar(useOv.pos_x,     useOv.pos_y    )
 		local x1, y1 = worldToRadar(useOv.pos_x + w, useOv.pos_y    )
@@ -211,7 +235,7 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 			{ x = x2, y = y2, u = 1, v = 1 },
 			{ x = x3, y = y3, u = 0, v = 1 },
 		})
-		-- Dark overlay for icon readability
+		-- Subtle dark overlay so player icons stay readable
 		draw.NoTexture()
 		surface.SetDrawColor(0, 0, 0, 65)
 		surface.DrawPoly(buildCirclePoly(cx, cy, innerR))
@@ -230,10 +254,11 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 		end
 	end
 
-	-- ---- Player icons ----
-	local triR     = math.max(4, math.floor(innerR * 0.048))
-	local selfTriR = triR + 2
+	-- ---- Icons ----
+	local triR  = math.max(4, math.floor(innerR * 0.048))  -- other players: circle radius
+	local selfR = triR + 2                                   -- local player: arrow size
 
+	-- Players
 	for _, ply in ipairs(player.GetAll()) do
 		if not IsValid(ply) then continue end
 		local plyrTeam = ply:Team()
@@ -244,10 +269,10 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 		if isEnemy and not showAll then continue end
 
 		if isSelf then
-			-- Local player: always at centre, always pointing up (radar rotates with them)
+			-- Local player: arrow at centre pointing up (radar is player-oriented)
 			if not lpAlive then continue end
-			drawPlayerArrow(cx + 1, cy + 1, 0, selfTriR, COL_SHADOW)
-			drawPlayerArrow(cx, cy, 0, selfTriR, COL_SELF)
+			drawPlayerArrow(cx + 1, cy + 1, 0, selfR, COL_SHADOW)
+			drawPlayerArrow(cx, cy, 0, selfR, COL_SELF)
 			continue
 		end
 
@@ -256,6 +281,7 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 		if not inCircle(sx, sy) then continue end
 
 		if not ply:Alive() then
+			-- Dead teammate: tiny grey square
 			local ds = 3
 			draw.NoTexture()
 			surface.SetDrawColor(COL_DEAD.r, COL_DEAD.g, COL_DEAD.b, COL_DEAD.a)
@@ -263,14 +289,12 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 			continue
 		end
 
-		-- Direction relative to local player's facing
-		local relYaw = ply:EyeAngles().y - lpYaw
-		local col    = not isEnemy and COL_ALLY or COL_ENEMY
-		drawPlayerArrow(sx + 1, sy + 1, relYaw, triR, COL_SHADOW)
-		drawPlayerArrow(sx, sy, relYaw, triR, col)
+		local col = not isEnemy and COL_ALLY or COL_ENEMY
+		drawPlayerCircle(sx + 1, sy + 1, triR, COL_SHADOW)
+		drawPlayerCircle(sx, sy, triR, col)
 	end
 
-	-- ---- Bots ----
+	-- Bots
 	local botClasses = {
 		["css_bot_t_csgo"]  = TEAM_T,
 		["css_bot_ct_csgo"] = TEAM_CT,
@@ -285,14 +309,13 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 			local sx, sy = worldToRadar(pos.x, pos.y)
 			if not inCircle(sx, sy) then continue end
 
-			local relYaw = bot:GetAngles().y - lpYaw
-			local col    = isEnemy and COL_ENEMY or COL_ALLY
-			drawPlayerArrow(sx + 1, sy + 1, relYaw, triR, COL_SHADOW)
-			drawPlayerArrow(sx, sy, relYaw, triR, col)
+			local col = isEnemy and COL_ENEMY or COL_ALLY
+			drawPlayerCircle(sx + 1, sy + 1, triR, COL_SHADOW)
+			drawPlayerCircle(sx, sy, triR, col)
 		end
 	end
 
-	-- ---- Planted bomb ----
+	-- Planted bomb
 	for _, ent in ipairs(ents.FindByClass("swcs_planted_c4")) do
 		if not IsValid(ent) then continue end
 		local pos = ent:GetPos()
@@ -310,7 +333,7 @@ hook.Add("HUDPaint", "CSMode_Radar", function()
 	-- ---- End stencil clip ----
 	endCircleClip()
 
-	-- ---- Map name label ----
+	-- ---- Map name ----
 	draw.SimpleText(mapName, "CS2H_Tiny",
 		cx, oy + S + 3,
 		Color(65, 75, 90, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
