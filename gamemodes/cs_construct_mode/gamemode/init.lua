@@ -884,6 +884,7 @@ function GM:PlayerCanPickupWeapon(ply, wep)
 end
 
 -- Отладка: вывести все сущности в мире (запускать после смерти бота)
+-- Вывод идёт в серверную консоль (обходит лимит 255 байт клиентских сообщений)
 concommand.Add("cs_debug_ents", function(ply)
 	if not IsValid(ply) or not ply:IsAdmin() then return end
 	local counts = {}
@@ -897,7 +898,9 @@ concommand.Add("cs_debug_ents", function(ply)
 		table.insert(out, cls .. " x" .. n)
 	end
 	table.sort(out)
-	ply:PrintMessage(HUD_PRINTCONSOLE, "=== ENTITIES IN WORLD ===\n" .. table.concat(out, "\n") .. "\n=========================\n")
+	print("=== ENTITIES IN WORLD ===")
+	for _, line in ipairs(out) do print(line) end
+	print("=========================")
 end)
 
 -- Применить перчатки без рестарта: перезагружает руки игрока
